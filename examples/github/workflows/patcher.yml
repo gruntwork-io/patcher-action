@@ -22,5 +22,5 @@ jobs:
         run: |
           echo "This pull request contains `README-TO-COMPLETE-UPDATE.md` files"
           echo "Check for outstanding `README-TO-COMPLETE-UPDATE.md` files"
-          echo "This check will pass, when all the outstanding files have been actioned and deleted
+          echo "This check will pass, when all the outstanding files have been actioned and deleted"
           exit 1
