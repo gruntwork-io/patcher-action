@@ -44,7 +44,6 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@master
         with:
           repo: 'gruntwork-io/patcher-cli'
-          version: 'tags/${{ vars.PATCHER_VERSION }}'
           file: 'patcher_linux_amd64'
           target: '/tmp/patcher'
           token: ${{ secrets.PAT }}
