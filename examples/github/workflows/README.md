@@ -11,9 +11,14 @@ The promotional workflow uses 5 GitHub Actions workflows:
 ### Config
 - The workflows require a GH personal access token to be defined using a secret named `PAT`.
 
-  - In order for the generate PR to trigger other workflows, you need to use a repo scoped [Personal Access Token (PAT)](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) created on an account that has write access to the repository that pull requests are being created in. This is the standard workaround and [recommended by GitHub](https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow).
-  - The PAT cannot be scoped to a specific repository, so the token becomes a very sensitive secret. If this is a concern, the PAT can instead be created for a dedicated machine account that has collaborator access to the repository.
-  - Note that because the account that owns the PAT will be the creator of pull requests, that user account will be unable to perform actions such as request changes or approve the pull request.
+  - In order for the generate PR to trigger other workflows, you need to use a repo scoped [Personal Access Token (PAT)](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) created on an account that has write access to the repository that pull requests are being created in. This is the standard workaround [recommended by GitHub](https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow).
+  - Patcher uses the PAT to access release information for Gruntwork modules, so it cannot be scoped to a specific repository and the token becomes a very sensitive secret.
+  - We strongly recommend creating a GitHub Machine User to issue the personal access token. You might name it something like “patcher-bot” or “gruntwork-bot” This has several benefits:
+    - All actions taken by this account will be recorded as having been initiated by patcher-bot, so you’ll know what’s from an automation and what a human user did manually.
+    - You can limit the bot’s access to exactly the repos needed, in line with the principle of least access.
+    - If a human user leaves your GitHub org, the Patcher bot will remain in place.
+    - Be sure to safely store the login credentials for this user. For example, at Gruntwork, credentials for GitHub Machine Users are stored in 1Password where they are shared with exactly the right people.
+
 - The environment folder name is set in the workflow file using the `ENV_FOLDER_NAME` environment variable.
 
 For example:
