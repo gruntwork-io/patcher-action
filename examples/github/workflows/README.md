@@ -11,7 +11,7 @@ The promotional workflow uses 5 GitHub Actions workflows:
 ### Config
 - The workflows require a [GitHub Personal Access Token](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) to be defined using a secret named `PAT`.
 
-  - In order for the generate PR to trigger other workflows, you need to use a repo scoped [Personal Access Token (PAT)](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) created on an account that has write access to the repository that pull requests are being created in. This is the standard workaround [recommended by GitHub](https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow).
+  - To allow the merging of a Pull Request to trigger other workflows, you need to use a repo-scoped GitHub Personal Access Token (PAT) created on an account that has write access to the repository that pull requests are being created in. This is the standard workaround [recommended by GitHub](https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow).
   - Patcher uses the PAT to access release information for Gruntwork modules, so it cannot be scoped to a specific repository and the token becomes a very sensitive secret.
   - We strongly recommend creating a GitHub Machine User to issue the personal access token. You might name it something like “patcher-bot” or “gruntwork-bot” This has several benefits:
     - All actions taken by this account will be recorded as having been initiated by patcher-bot, so you’ll know what’s from an automation and what a human user did manually.
