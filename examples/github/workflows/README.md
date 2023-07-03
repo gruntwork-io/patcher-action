@@ -9,7 +9,7 @@ The promotional workflow uses 5 GitHub Actions workflows:
 ## The Updates Dependencies Workflows
 
 ### Config
-- The workflows require a GH personal access token to be defined using a secret named `PAT`.
+- The workflows require a [GitHub Personal Access Token](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) to be defined using a secret named `PAT`.
 
   - In order for the generate PR to trigger other workflows, you need to use a repo scoped [Personal Access Token (PAT)](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) created on an account that has write access to the repository that pull requests are being created in. This is the standard workaround [recommended by GitHub](https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow).
   - Patcher uses the PAT to access release information for Gruntwork modules, so it cannot be scoped to a specific repository and the token becomes a very sensitive secret.
