@@ -1,0 +1,13 @@
+name: "Patcher Action"
+description: "Run Patcher commands"
+author: "Gruntwork.io <grunty@gruntwork.io>"
+
+inputs:
+  GITHUB_TOKEN:
+    description: "GitHub token"
+    required: true
+
+runs:
+  using: 'node16'
+  main: 'dist/index.js'
+
