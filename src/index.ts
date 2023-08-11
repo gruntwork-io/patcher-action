@@ -1,8 +1,10 @@
-import * as core from '@actions/core'
+import * as core from '@actions/core';
+import { run } from './action';
 
-async function run() {
-  console.log("hi!");
-}
-
-
-run()
+(async (): Promise<void> => {
+  try {
+    await run();
+  } catch (e) {
+    core.setFailed(`Action failed with "${e}"`);
+  }
+})();

@@ -3,7 +3,7 @@ description: "Run Patcher commands"
 author: "Gruntwork.io <grunty@gruntwork.io>"
 
 inputs:
-  GITHUB_TOKEN:
+  github_token:
     description: "GitHub token"
     required: true
 
