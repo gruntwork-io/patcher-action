@@ -17637,7 +17637,7 @@ function osPlatform() {
     }
 }
 
-async function openPullRequest(output) {
+async function openPullRequest(output, ghtoken) {
     const head = "patcher-updates"
     const title = "[Patcher] Update"
 
@@ -17652,10 +17652,19 @@ async function openPullRequest(output) {
     await exec.exec("git", ["add", "."])
     await exec.exec("git", ["commit", "-m", commitMessage])
     await exec.exec("git", ["checkout", "-b", head])
-    await exec.exec("git", ["push", "origin", head])
 
+//     ('git rev-parse HEAD')
+// .toString().trim()
 
     const context = github.context;
+
+    core.info(`Context is ${context.repo.owner}, ${context.repo.repo}`)
+
+    // await exec.exec("git", ["push", "origin", head])
+
+    await exec.exec("git", ["push", `https://${ghtoken}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
+
+
     const result = await octokit.rest.pulls.create({ ...context.repo, title, head, base: 'master', body, });
     core.info(result)
 }

@@ -80,8 +80,4 @@ export async function run() {
     }
 
     processUpdate(output, ghToken)
-
-    // core.info(childProcess.execSync("git diff").toString())
-    // git commit, push changes with the hash.
-    // push the branch with git.
 }
