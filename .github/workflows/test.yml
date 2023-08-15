@@ -1,24 +1,17 @@
-name: 'Patcher'
+name: 'Patcher Tests'
 
 on:
   push:
     branches:
       - main
-  pull_request:
-
-defaults:
-  run:
-    shell: bash
 
 jobs:
   patcher:
-    name: 'Install Patcher'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout
-
+      - uses: actions/checkout@v3
       - name: Patcher
         uses: ./
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          patcher_command: update

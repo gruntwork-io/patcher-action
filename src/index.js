@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import { run } from './action';
 
-(async (): Promise<void> => {
+(async () => {
   try {
     await run();
   } catch (e) {

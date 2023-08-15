@@ -6,8 +6,18 @@ inputs:
   github_token:
     description: "GitHub token"
     required: true
+  patcher_command:
+    description: "Patcher command to run. Valid options: 'update' or 'report'. Defaults to 'update'."
+  update_strategy:
+    description: "Update strategy. Only used when running 'update'. Defaults to 'next-safe'."
+  folder:
+    description: "Folder to be updated."
+
+outputs:
+  dependencies:
+    description: TF/TG dependencies from the given context. Only works for 'report'
 
 runs:
   using: 'node16'
-  main: 'dist/index.js'
+  main: './dist/index.js'
 

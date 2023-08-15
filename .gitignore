@@ -96,7 +96,7 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+# dist # -- act's docker can not find the file if it's ignored by .gitignore
 
 # Gatsby files
 .cache/
