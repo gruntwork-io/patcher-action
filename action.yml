@@ -10,12 +10,14 @@ inputs:
     description: "Patcher command to run. Valid options: 'update' or 'report'. Defaults to 'update'."
   update_strategy:
     description: "Update strategy. Only used when running 'update'. Defaults to 'next-safe'."
-  folder:
-    description: "Folder to be updated."
+  dependency:
+    description: "Target the update to a single dependency. Format: <org>/<repo>/<name>. Example: gruntwork-io/terraform-aws-service-catalog/services/ecs-module."
+  working_dir:
+    description: "Directory where Patcher should run. If empty, it will run in the whole repo."
 
 outputs:
   dependencies:
-    description: TF/TG dependencies from the given context. Only works for 'report'
+    description: "Terraform and Terragrunt dependencies from the given directory. Only works for 'report'."
 
 runs:
   using: 'node16'
