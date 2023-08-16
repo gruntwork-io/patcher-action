@@ -136,18 +136,26 @@ function execOpts(token) {
 
 async function runPatcher(binaryPath, command, {updateStrategy, dependency, patcherWorkingDir, token}) {
     if (command === reportCommand) {
+        core.startGroup("Running 'patcher report'")
         const result = await exec.getExecOutput(binaryPath,
             [command, nonInteractiveFlag, patcherWorkingDir],
             execOpts(token))
+        core.endGroup()
 
+        core.startGroup("Setting 'dependencies' output")
         core.setOutput("dependencies", result.stdout)
+        core.endGroup()
     } else {
+        core.startGroup("Running 'patcher update'")
         const result = await exec.getExecOutput(binaryPath,
             updateArgs(updateStrategy, dependency, patcherWorkingDir),
             execOpts((token))
         )
+        core.endGroup()
 
+        core.startGroup("Opening pull request")
         await openPullRequest(result.stdout, dependency, token)
+        core.endGroup()
     }
 }
 
@@ -166,10 +174,9 @@ export async function run() {
     const patcherPath = await downloadRelease(gruntworkOrg, patcherRepo, patcherVersion, token);
     core.endGroup()
 
-    core.startGroup("Run Patcher")
+    core.startGroup("Granting permissions to Patcher's binary")
     await exec.exec("chmod", ["+x", patcherPath])
+    core.endGroup()
 
     await runPatcher(patcherPath, command, {updateStrategy, dependency, patcherWorkingDir, token})
-
-    core.endGroup()
 }
