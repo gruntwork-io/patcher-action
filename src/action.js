@@ -1,12 +1,92 @@
-import * as childProcess from "child_process";
+import * as os from "os";
 
 import * as github from "@actions/github";
+import * as toolCache from "@actions/tool-cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 
-import {gruntworkOrg, nonInteractiveFlag, noColorFlag, patcherRepo, patcherVersion, reportCommand, updateCommand} from "./consts";
-import { downloadRelease, openPullRequest } from "./github";
-import {getExecOutput} from "@actions/exec";
+// Define consts
+
+export const gruntworkOrg = "gruntwork-io";
+export const patcherRepo = "patcher-cli";
+export const patcherVersion = "v0.4.3";
+
+export const reportCommand = "report";
+export const updateCommand = "update";
+
+export const nonInteractiveFlag = "--non-interactive"
+export const noColorFlag = "--no-color"
+export const skipContainerFlag = "--skip-container-runtime"
+
+function osPlatform() {
+    switch (os.platform()) {
+        case "linux":
+            return "linux";
+        case "darwin":
+            return "darwin";
+        default:
+            core.setFailed("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
+            return;
+    }
+}
+
+export async function openPullRequest(output, dependency, ghToken) {
+    const head = `patcher-updates-${dependency}`
+    const title = `[Patcher] Update ${dependency}`
+
+    const body = `
+Updated the ${dependency} dependency using Patcher.
+
+### Update summary
+\`\`\`
+${output}
+\`\`\`
+`
+
+    const commitMessage = "Update dependencies using Patcher"
+    const commitAuthor = "Grunty"
+    const commitEmail = "grunty@gruntwork.io"
+
+    await exec.exec("git", ["config", "user.name", commitAuthor])
+    await exec.exec("git", ["config", "user.email", commitEmail])
+    await exec.exec("git", ["add", "."])
+    await exec.exec("git", ["commit", "-m", commitMessage])
+    await exec.exec("git", ["checkout", "-b", head])
+
+    const context = github.context;
+    core.info(`Context is ${context.repo.owner}, ${context.repo.repo}`)
+
+    await exec.exec("git", ["push", "-f", `https://${ghToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
+
+    const octokit = new github.getOctokit(ghToken);
+    const result = await octokit.rest.pulls.create({ ...context.repo, title, head, base: 'main', body, });
+    core.info(result)
+}
+
+export async function downloadRelease(owner, repo, tag, ghToken) {
+    core.info(`Downloading Patcher version ${patcherVersion}`);
+
+    const octokit = new github.getOctokit(ghToken);
+
+    const getReleaseUrl = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag })
+    core.info(JSON.stringify(getReleaseUrl.data.assets))
+
+    const re = new RegExp(`${osPlatform()}.*amd64`)
+    let asset = getReleaseUrl.data.assets.find(obj => {
+        return re.test(obj.name)
+    })
+
+    const path =  await toolCache.downloadTool(asset.url,
+        undefined,
+        `token ${ghToken}`,
+        {
+            accept: 'application/octet-stream'
+        }
+    );
+
+    core.debug(`Patcher version '${patcherVersion}' has been downloaded at ${path}`);
+    return path
+}
 
 function validateCommand(command) {
     switch (command) {
@@ -21,68 +101,66 @@ function validateCommand(command) {
     }
 }
 
-function flags(command, updateStrategy, dependency) {
-    let updateFlags = `${noColorFlag} ${nonInteractiveFlag}`;
+function updateArgs(updateStrategy, dependency, workingDir) {
+    let args = ["update", noColorFlag, nonInteractiveFlag, skipContainerFlag];
     if (updateStrategy !== "") {
-        updateFlags = updateFlags.concat(` --update-strategy ${updateStrategy}`)
+        args = args.concat(`--update-strategy=${updateStrategy}`)
     }
 
-    if (dependency !== "" && command === updateCommand) {
-        updateFlags = updateFlags.concat(` --target ${dependency}`)
+    if (dependency !== "") {
+        args = args.concat(`--target=${dependency}`)
     }
 
-    switch (command) {
-        case updateCommand:
-            return updateFlags;
-        case reportCommand:
-            return nonInteractiveFlag;
+    return args.concat([workingDir]);
+}
+
+function execOpts(token) {
+    const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`
+    return {
+        env: {
+            "GITHUB_OAUTH_TOKEN": token,
+            "PATCHER_TELEMETRY_ID": telemetryId,
+            "HOME": "."
+        }
     }
 }
 
-function processReport(output) {
-    core.setOutput("dependencies", output)
-}
+async function runPatcher(binaryPath, command, {updateStrategy, dependency, patcherWorkingDir, token}) {
+    if (command === reportCommand) {
+        const result = await exec.getExecOutput(binaryPath,
+            [command, nonInteractiveFlag, patcherWorkingDir],
+            execOpts(token))
 
-function processUpdate(output, dependency, ghToken) {
+        core.setOutput("dependencies", result.stdout)
+    } else {
+        const result = await exec.getExecOutput(binaryPath,
+            updateArgs(updateStrategy, dependency, patcherWorkingDir),
+            execOpts((token))
+        )
 
-    openPullRequest(output, dependency, ghToken)
+        await openPullRequest(result.stdout, dependency, token)
+    }
 }
 
 export async function run() {
-    core.info(`Actor is: ${github.context.actor}`)
-    const ghToken = core.getInput("github_token")
+    const token = core.getInput("github_token")
     const patcherCommand = core.getInput("patcher_command")
     const updateStrategy = core.getInput("update_strategy")
-
     const dependency = core.getInput("dependency")
-    core.info(`DEPENDENCY: ${dependency}`)
-
-    // TODO better name
-    const folder = core.getInput("folder")
-
+    const patcherWorkingDir = core.getInput("working_dir")
 
     const command = validateCommand(patcherCommand);
+
     core.info(`Patcher's ${command}' command will be executed.`);
 
     core.startGroup("Download Patcher")
-    core.info(`Downloading Patcher version ${patcherVersion}`);
-    const cachedPath = await downloadRelease(gruntworkOrg, patcherRepo, patcherVersion, ghToken);
-
-    core.debug(`Patcher version '${patcherVersion}' has been downloaded at ${cachedPath}`);
+    const patcherPath = await downloadRelease(gruntworkOrg, patcherRepo, patcherVersion, token);
     core.endGroup()
-
 
     core.startGroup("Run Patcher")
-    // TODO replace with https://github.com/actions/toolkit/tree/master/packages/exec
-    await exec.exec("chmod", ["+x", cachedPath])
-    await exec.exec("export", ["PATCHER_TOKEN", "Gruntwork-marina-action"])
+    await exec.exec("chmod", ["+x", patcherPath])
 
-    const output = childProcess.execSync(`GITHUB_OAUTH_TOKEN=${ghToken} ${cachedPath} ${command} ${flags(command, updateStrategy, dependency)} ${folder}`).toString()
+    await runPatcher(patcherPath, command, {updateStrategy, dependency, patcherWorkingDir, token})
+
     core.endGroup()
-
-    if (command === reportCommand) {
-        return processReport(output)
-    }
-
-    processUpdate(output, dependency, ghToken)
 }
