@@ -20,7 +20,7 @@ export async function openPullRequest(output, ghtoken) {
     const head = "patcher-updates"
     const title = "[Patcher] Update"
 
-    const body = ` Updated dependencies. ${output} `
+    const body = `Updated dependencies. ${output}`
 
     const commitMessage = "Update dependencies using Patcher"
     const commitAuthor = "Marina <marina@gruntwork.io>"
@@ -32,14 +32,8 @@ export async function openPullRequest(output, ghtoken) {
     await exec.exec("git", ["commit", "-m", commitMessage])
     await exec.exec("git", ["checkout", "-b", head])
 
-//     ('git rev-parse HEAD')
-// .toString().trim()
-
     const context = github.context;
-
     core.info(`Context is ${context.repo.owner}, ${context.repo.repo}`)
-
-    // await exec.exec("git", ["push", "origin", head])
 
     await exec.exec("git", ["push", `https://${ghtoken}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
 

@@ -2,7 +2,6 @@ import * as childProcess from "child_process";
 
 import * as github from "@actions/github";
 import * as core from "@actions/core";
-import * as yaml from "js-yaml"
 
 import {gruntworkOrg, nonInteractiveFlag, noColorFlag, patcherRepo, patcherVersion, reportCommand, updateCommand} from "./consts";
 import { downloadRelease, openPullRequest } from "./github";
@@ -43,8 +42,6 @@ function processReport(output) {
 }
 
 function processUpdate(output, ghToken) {
-    // const yamlOutput = yaml.load(output);
-    // core.debug(yamlOutput)
 
     openPullRequest(output, ghToken)
 }
