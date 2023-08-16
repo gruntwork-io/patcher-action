@@ -16,8 +16,8 @@ function osPlatform() {
     }
 }
 
-export async function openPullRequest(output, ghtoken) {
-    const head = "patcher-updates"
+export async function openPullRequest(output, dependency, ghtoken) {
+    const head = `patcher-updates-${dependency}`
     const title = "[Patcher] Update"
 
     const body = `Updated dependencies. ${output}`
@@ -35,10 +35,10 @@ export async function openPullRequest(output, ghtoken) {
     const context = github.context;
     core.info(`Context is ${context.repo.owner}, ${context.repo.repo}`)
 
-    await exec.exec("git", ["push", `https://${ghtoken}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
+    await exec.exec("git", ["push", "-f", `https://${ghtoken}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
 
-
-    const result = await octokit.rest.pulls.create({ ...context.repo, title, head, base: 'master', body, });
+    const octokit = new github.getOctokit(ghtoken);
+    const result = await octokit.rest.pulls.create({ ...context.repo, title, head, base: 'main', body, });
     core.info(result)
 }
 
