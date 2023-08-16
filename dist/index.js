@@ -17712,11 +17712,16 @@ function validateCommand(command) {
     }
 }
 
-function flags(command, updateStrategy) {
+function flags(command, updateStrategy, dependency) {
     let updateFlags = `${noColorFlag} ${nonInteractiveFlag}`;
     if (updateStrategy !== "") {
         updateFlags = updateFlags.concat(` --update-strategy ${updateStrategy}`)
     }
+
+    if (dependency !== "" && command === updateCommand) {
+        updateFlags = updateFlags.concat(` --target ${dependency}`)
+    }
+
     switch (command) {
         case updateCommand:
             return updateFlags;
@@ -17742,6 +17747,9 @@ async function run() {
     const patcherCommand = core.getInput("patcher_command")
     const updateStrategy = core.getInput("update_strategy")
 
+    const dependency = core.getInput("dependency")
+    core.info(`DEPENDENCY: ${dependency}`)
+
     // TODO better name
     const folder = core.getInput("folder")
 
@@ -17763,7 +17771,7 @@ async function run() {
 
     external_child_process_.execSync("export PATCHER_TOKEN=Gruntwork-marina-action")
 
-    const output = external_child_process_.execSync(`GITHUB_OAUTH_TOKEN=${ghToken} ${cachedPath} ${command} ${flags(command, updateStrategy)} ${folder}`).toString()
+    const output = external_child_process_.execSync(`GITHUB_OAUTH_TOKEN=${ghToken} ${cachedPath} ${command} ${flags(command, updateStrategy, dependency)} ${folder}`).toString()
 
     core.endGroup()
 
@@ -17772,10 +17780,6 @@ async function run() {
     }
 
     processUpdate(output, ghToken)
-
-    // core.info(childProcess.execSync("git diff").toString())
-    // git commit, push changes with the hash.
-    // push the branch with git.
 }
 
 ;// CONCATENATED MODULE: ./src/index.js

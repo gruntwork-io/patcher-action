@@ -20,11 +20,16 @@ function validateCommand(command) {
     }
 }
 
-function flags(command, updateStrategy) {
+function flags(command, updateStrategy, dependency) {
     let updateFlags = `${noColorFlag} ${nonInteractiveFlag}`;
     if (updateStrategy !== "") {
         updateFlags = updateFlags.concat(` --update-strategy ${updateStrategy}`)
     }
+
+    if (dependency !== "" && command === updateCommand) {
+        updateFlags = updateFlags.concat(` --target ${dependency}`)
+    }
+
     switch (command) {
         case updateCommand:
             return updateFlags;
@@ -50,6 +55,9 @@ export async function run() {
     const patcherCommand = core.getInput("patcher_command")
     const updateStrategy = core.getInput("update_strategy")
 
+    const dependency = core.getInput("dependency")
+    core.info(`DEPENDENCY: ${dependency}`)
+
     // TODO better name
     const folder = core.getInput("folder")
 
@@ -71,7 +79,7 @@ export async function run() {
 
     childProcess.execSync("export PATCHER_TOKEN=Gruntwork-marina-action")
 
-    const output = childProcess.execSync(`GITHUB_OAUTH_TOKEN=${ghToken} ${cachedPath} ${command} ${flags(command, updateStrategy)} ${folder}`).toString()
+    const output = childProcess.execSync(`GITHUB_OAUTH_TOKEN=${ghToken} ${cachedPath} ${command} ${flags(command, updateStrategy, dependency)} ${folder}`).toString()
 
     core.endGroup()
 
