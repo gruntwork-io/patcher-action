@@ -33,6 +33,9 @@ function osPlatform() {
 export async function openPullRequest(output, dependency, ghToken) {
     const head = `patcher-updates-${dependency}`
     const title = `[Patcher] Update ${dependency}`
+    const commitMessage = "Update dependencies using Patcher"
+    const commitAuthor = "Grunty"
+    const commitEmail = "grunty@gruntwork.io"
 
     const body = `
 Updated the \`${dependency}\` dependency using Patcher.
@@ -42,10 +45,6 @@ Updated the \`${dependency}\` dependency using Patcher.
 ${output}
 \`\`\`
 `
-
-    const commitMessage = "Update dependencies using Patcher"
-    const commitAuthor = "Grunty"
-    const commitEmail = "grunty@gruntwork.io"
 
     await exec.exec("git", ["config", "user.name", commitAuthor])
     await exec.exec("git", ["config", "user.email", commitEmail])
@@ -58,8 +57,20 @@ ${output}
     await exec.exec("git", ["push", "-f", `https://${ghToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
 
     const octokit = new github.getOctokit(ghToken);
-    const result = await octokit.rest.pulls.create({ ...context.repo, title, head, base: 'main', body, });
-    core.info(result)
+
+    const repoDetails = await octokit.rest.repos.get({ ...context.repo });
+    const base = repoDetails.data.default_branch;
+    core.debug(`Base branch is ${base}. Opening the PR against it.`)
+
+    try {
+        await octokit.rest.pulls.create({ ...context.repo, title, head, base, body, });
+    } catch (error) {
+        if (error.message?.includes(`A pull request already exists for`)) {
+            core.error(`A pull request for ${head} already exists. The branch was updated.`)
+        } else {
+            throw error
+        }
+    }
 }
 
 export async function downloadRelease(owner, repo, tag, ghToken) {
@@ -68,7 +79,6 @@ export async function downloadRelease(owner, repo, tag, ghToken) {
     const octokit = new github.getOctokit(ghToken);
 
     const getReleaseUrl = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag })
-    core.info(JSON.stringify(getReleaseUrl.data.assets))
 
     const re = new RegExp(`${osPlatform()}.*amd64`)
     let asset = getReleaseUrl.data.assets.find(obj => {
