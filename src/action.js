@@ -2,9 +2,11 @@ import * as childProcess from "child_process";
 
 import * as github from "@actions/github";
 import * as core from "@actions/core";
+import * as exec from "@actions/exec";
 
 import {gruntworkOrg, nonInteractiveFlag, noColorFlag, patcherRepo, patcherVersion, reportCommand, updateCommand} from "./consts";
 import { downloadRelease, openPullRequest } from "./github";
+import {getExecOutput} from "@actions/exec";
 
 function validateCommand(command) {
     switch (command) {
@@ -41,9 +43,9 @@ function processReport(output) {
     core.setOutput("dependencies", output)
 }
 
-function processUpdate(output, ghToken) {
+function processUpdate(output, dependency, ghToken) {
 
-    openPullRequest(output, ghToken)
+    openPullRequest(output, dependency, ghToken)
 }
 
 export async function run() {
@@ -72,11 +74,19 @@ export async function run() {
 
     core.startGroup("Run Patcher")
     // TODO replace with https://github.com/actions/toolkit/tree/master/packages/exec
-    childProcess.execSync(`chmod +x ${cachedPath}`)
-
-    childProcess.execSync("export PATCHER_TOKEN=Gruntwork-marina-action")
+    await exec.exec("chmod", ["+x", cachedPath])
+    // await exec.exec("export", "PATCHER_TOKEN", "Gruntwork-marina-action")
 
     const output = childProcess.execSync(`GITHUB_OAUTH_TOKEN=${ghToken} ${cachedPath} ${command} ${flags(command, updateStrategy, dependency)} ${folder}`).toString()
+    // const args = [command].concat(flags(command, updateStrategy, dependency)).concat([folder])
+    // const output = await exec.getExecOutput(cachedPath, args, {
+    //         env: {
+    //             "HOME": ".",
+    //             "PATCHER_TOKEN": "",
+    //             "GITHUB_OAUTH_TOKEN": ghToken
+    //         }
+    //     });
+    // const result = output.stdout
 
     core.endGroup()
 
@@ -84,5 +94,5 @@ export async function run() {
         return processReport(output)
     }
 
-    processUpdate(output, ghToken)
+    processUpdate(output, dependency, ghToken)
 }
