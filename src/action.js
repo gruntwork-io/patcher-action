@@ -7,16 +7,16 @@ import * as exec from "@actions/exec";
 
 // Define consts
 
-export const gruntworkOrg = "gruntwork-io";
-export const patcherRepo = "patcher-cli";
-export const patcherVersion = "v0.4.3";
+const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
+const PATCHER_GITHUB_REPO = "patcher-cli";
+const patcherVersion = "v0.4.3";
 
-export const reportCommand = "report";
-export const updateCommand = "update";
+const reportCommand = "report";
+const updateCommand = "update";
 
-export const nonInteractiveFlag = "--non-interactive"
-export const noColorFlag = "--no-color"
-export const skipContainerFlag = "--skip-container-runtime"
+const nonInteractiveFlag = "--non-interactive"
+const noColorFlag = "--no-color"
+const skipContainerFlag = "--skip-container-runtime"
 
 function osPlatform() {
     switch (os.platform()) {
@@ -30,7 +30,7 @@ function osPlatform() {
     }
 }
 
-export async function openPullRequest(output, dependency, ghToken) {
+async function openPullRequest(output, dependency, ghToken) {
     const head = `patcher-updates-${dependency}`
     const title = `[Patcher] Update ${dependency}`
     const commitMessage = "Update dependencies using Patcher"
@@ -73,7 +73,7 @@ ${output}
     }
 }
 
-export async function downloadRelease(owner, repo, tag, ghToken) {
+async function downloadRelease(owner, repo, tag, ghToken) {
     core.info(`Downloading Patcher version ${patcherVersion}`);
 
     const octokit = new github.getOctokit(ghToken);
@@ -112,10 +112,14 @@ function validateCommand(command) {
 
 function updateArgs(updateStrategy, dependency, workingDir) {
     let args = ["update", noColorFlag, nonInteractiveFlag, skipContainerFlag];
+
+    // If updateStrategy or dependency are not empty, are not empty, assign them with the appropriate flag.
+    // If they are invalid, Patcher will return an error, which will cause the Action to fail.
     if (updateStrategy !== "") {
         args = args.concat(`--update-strategy=${updateStrategy}`)
     }
 
+    // If a dependency is provided, set the `target` flag so Patcher can limit the update to a single dependency.
     if (dependency !== "") {
         args = args.concat(`--target=${dependency}`)
     }
@@ -123,39 +127,40 @@ function updateArgs(updateStrategy, dependency, workingDir) {
     return args.concat([workingDir]);
 }
 
-function execOpts(token) {
-    const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`
+function getPatcherEnvVars(token) {
+    const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
+
     return {
-        env: {
-            "GITHUB_OAUTH_TOKEN": token,
-            "PATCHER_TELEMETRY_ID": telemetryId,
-            "HOME": "."
-        }
-    }
+        "GITHUB_OAUTH_TOKEN": token,
+        "PATCHER_TELEMETRY_ID": telemetryId,
+        "HOME": "."
+    };
 }
 
 async function runPatcher(binaryPath, command, {updateStrategy, dependency, patcherWorkingDir, token}) {
-    if (command === reportCommand) {
-        core.startGroup("Running 'patcher report'")
-        const result = await exec.getExecOutput(binaryPath,
-            [command, nonInteractiveFlag, patcherWorkingDir],
-            execOpts(token))
-        core.endGroup()
+    switch(command) {
+        case reportCommand:
+            core.startGroup("Running 'patcher report'")
+            const reportOutput = await exec.getExecOutput(binaryPath,
+                [command, nonInteractiveFlag, patcherWorkingDir],
+                { env: getPatcherEnvVars(token) });
+            core.endGroup()
 
-        core.startGroup("Setting 'dependencies' output")
-        core.setOutput("dependencies", result.stdout)
-        core.endGroup()
-    } else {
-        core.startGroup("Running 'patcher update'")
-        const result = await exec.getExecOutput(binaryPath,
-            updateArgs(updateStrategy, dependency, patcherWorkingDir),
-            execOpts((token))
-        )
-        core.endGroup()
+            core.startGroup("Setting 'dependencies' output")
+            core.setOutput("dependencies", reportOutput.stdout)
+            core.endGroup()
 
-        core.startGroup("Opening pull request")
-        await openPullRequest(result.stdout, dependency, token)
-        core.endGroup()
+            return
+        default:
+            core.startGroup("Running 'patcher update'")
+            const updateOutput = await exec.getExecOutput(binaryPath,
+                updateArgs(updateStrategy, dependency, patcherWorkingDir),
+                { env: getPatcherEnvVars(token) });
+            core.endGroup()
+
+            core.startGroup("Opening pull request")
+            await openPullRequest(updateOutput.stdout, dependency, token)
+            core.endGroup()
     }
 }
 
@@ -171,7 +176,7 @@ export async function run() {
     core.info(`Patcher's ${command}' command will be executed.`);
 
     core.startGroup("Download Patcher")
-    const patcherPath = await downloadRelease(gruntworkOrg, patcherRepo, patcherVersion, token);
+    const patcherPath = await downloadRelease(GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, patcherVersion, token);
     core.endGroup()
 
     core.startGroup("Granting permissions to Patcher's binary")
