@@ -79,13 +79,14 @@ async function downloadPatcherBinary(owner, repo, tag, ghToken) {
 
     const octokit = new github.getOctokit(ghToken);
 
-    const getReleaseUrl = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag })
+    const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag })
 
     const re = new RegExp(`${osPlatform()}.*amd64`)
-    let asset = getReleaseUrl.data.assets.find(obj => {
+    let asset = getReleaseResponse.data.assets.find(obj => {
         return re.test(obj.name)
     })
 
+    // Use @actions/tool-cache to download Patcher's binary from GitHub
     const patcherBinaryPath =  await toolCache.downloadTool(asset.url,
         PATCHER_BINARY_PATH,
         `token ${ghToken}`,
