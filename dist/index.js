@@ -13553,7 +13553,7 @@ function osPlatform() {
             return;
     }
 }
-async function openPullRequest(patcherRawOutput, dependency, ghToken) {
+async function openPullRequest(octokit, patcherRawOutput, dependency, ghToken) {
     var _a;
     const head = `patcher-updates-${dependency}`;
     const title = `[Patcher] Update ${dependency}`;
@@ -13575,7 +13575,6 @@ ${patcherRawOutput}
     await exec.exec("git", ["checkout", "-b", head]);
     const context = github.context;
     await exec.exec("git", ["push", "-f", `https://${ghToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`]);
-    const octokit = github.getOctokit(ghToken);
     const repoDetails = await octokit.rest.repos.get({ ...context.repo });
     const base = repoDetails.data.default_branch;
     core.debug(`Base branch is ${base}. Opening the PR against it.`);
@@ -13630,7 +13629,7 @@ function getPatcherEnvVars(token) {
         "HOME": "."
     };
 }
-async function runPatcher(binaryPath, command, { updateStrategy, dependency, workingDir, token }) {
+async function runPatcher(octokit, binaryPath, command, { updateStrategy, dependency, workingDir, token }) {
     switch (command) {
         case REPORT_COMMAND:
             core.startGroup("Running 'patcher report'");
@@ -13645,7 +13644,7 @@ async function runPatcher(binaryPath, command, { updateStrategy, dependency, wor
             const updateOutput = await exec.getExecOutput(binaryPath, updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
             core.endGroup();
             core.startGroup("Opening pull request");
-            await openPullRequest(updateOutput.stdout, dependency, token);
+            await openPullRequest(octokit, updateOutput.stdout, dependency, token);
             core.endGroup();
             return;
     }
@@ -13661,14 +13660,14 @@ async function run() {
         throw new Error(`Invalid Patcher command ${command}`);
     }
     core.info(`Patcher's ${command}' command will be executed.`);
-    core.startGroup("Download Patcher");
     const octokit = github.getOctokit(token);
+    core.startGroup("Download Patcher");
     const patcherPath = await downloadPatcherBinary(octokit, GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, PATCHER_VERSION, token);
     core.endGroup();
     core.startGroup("Granting permissions to Patcher's binary");
     await exec.exec("chmod", ["+x", patcherPath]);
     core.endGroup();
-    await runPatcher(patcherPath, command, { updateStrategy, dependency, workingDir, token });
+    await runPatcher(octokit, patcherPath, command, { updateStrategy, dependency, workingDir, token });
 }
 exports.run = run;
 
