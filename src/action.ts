@@ -4,7 +4,7 @@ import * as github from "@actions/github";
 import * as toolCache from "@actions/tool-cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
-import {Api} from "@octokit/plugin-rest-endpoint-methods/dist-types/types";
+import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/types";
 
 // Define consts
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
@@ -28,13 +28,26 @@ function osPlatform() {
     case "darwin":
       return platform;
     default:
-      core.setFailed("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
-      return;
+      throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
   }
 }
 
-async function openPullRequest(octokit: Api, patcherRawOutput: string, dependency: string, ghToken: string) {
-  const head = `patcher-updates-${dependency}`
+function branchName(dependency: string, workingDir: string): string {
+  let branch = "patcher-updates"
+
+  if (dependency) {
+    branch += `-${dependency}`
+  }
+
+  if (workingDir) {
+    branch += `-${workingDir}`
+  }
+
+  return branch;
+}
+
+async function openPullRequest(octokit: GitHub, patcherRawOutput: string, dependency: string, workingDir: string, ghToken: string) {
+  const head = branchName(dependency, workingDir)
   const title = `[Patcher] Update ${dependency}`
   const commitMessage = "Update dependencies using Patcher"
   const commitAuthor = "Grunty"
@@ -74,7 +87,7 @@ ${patcherRawOutput}
   }
 }
 
-async function downloadPatcherBinary(octokit: Api, owner: string, repo: string, tag: string, ghToken: string): Promise<string> {
+async function downloadPatcherBinary(octokit: GitHub, owner: string, repo: string, tag: string, ghToken: string): Promise<string> {
   core.info(`Downloading Patcher version ${tag}`);
 
 
@@ -138,7 +151,7 @@ type PatcherCliArgs = {
   token: string;
 }
 
-async function runPatcher(octokit: Api, binaryPath: string, command: string, {
+async function runPatcher(octokit: GitHub, binaryPath: string, command: string, {
   updateStrategy,
   dependency,
   workingDir,
@@ -165,7 +178,7 @@ async function runPatcher(octokit: Api, binaryPath: string, command: string, {
       core.endGroup()
 
       core.startGroup("Opening pull request")
-      await openPullRequest(octokit, updateOutput.stdout, dependency, token)
+      await openPullRequest(octokit, updateOutput.stdout, dependency, workingDir, token)
       core.endGroup()
 
       return
