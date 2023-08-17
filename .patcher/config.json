@@ -1,0 +1,6 @@
+// NOTE: Changing this file requires a restart of Patcher.
+{
+	// Unique id used for correlating telemetry sent from this instance.
+	// Do not edit this value.
+	"telemetry-reporter-id": "e0da2e0c-8ae6-467c-a01c-2fb9326a4f2d"
+}
