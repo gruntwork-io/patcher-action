@@ -13496,6 +13496,228 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ 7672:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.run = void 0;
+const os = __importStar(__nccwpck_require__(2037));
+const github = __importStar(__nccwpck_require__(5438));
+const toolCache = __importStar(__nccwpck_require__(7784));
+const core = __importStar(__nccwpck_require__(2186));
+const exec = __importStar(__nccwpck_require__(1514));
+// Define consts
+const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
+const PATCHER_GITHUB_REPO = "patcher-cli";
+const PATCHER_VERSION = "v0.4.3";
+const PATCHER_BINARY_PATH = "/tmp/patcher";
+const REPORT_COMMAND = "report";
+const UPDATE_COMMAND = "update";
+const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
+const NON_INTERACTIVE_FLAG = "--non-interactive";
+const NO_COLOR_FLAG = "--no-color";
+const SKIP_CONTAINER_FLAG = "--skip-container-runtime";
+function osPlatform() {
+    const platform = os.platform();
+    switch (platform) {
+        case "linux":
+        case "darwin":
+            return platform;
+        default:
+            core.setFailed("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
+            return;
+    }
+}
+async function openPullRequest(patcherRawOutput, dependency, ghToken) {
+    var _a;
+    const head = `patcher-updates-${dependency}`;
+    const title = `[Patcher] Update ${dependency}`;
+    const commitMessage = "Update dependencies using Patcher";
+    const commitAuthor = "Grunty";
+    const commitEmail = "grunty@gruntwork.io";
+    const body = `
+Updated the \`${dependency}\` dependency using Patcher.
+
+### Update summary
+\`\`\`yaml
+${patcherRawOutput}
+\`\`\`
+`;
+    await exec.exec("git", ["config", "user.name", commitAuthor]);
+    await exec.exec("git", ["config", "user.email", commitEmail]);
+    await exec.exec("git", ["add", "."]);
+    await exec.exec("git", ["commit", "-m", commitMessage]);
+    await exec.exec("git", ["checkout", "-b", head]);
+    const context = github.context;
+    await exec.exec("git", ["push", "-f", `https://${ghToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`]);
+    const octokit = github.getOctokit(ghToken);
+    const repoDetails = await octokit.rest.repos.get({ ...context.repo });
+    const base = repoDetails.data.default_branch;
+    core.debug(`Base branch is ${base}. Opening the PR against it.`);
+    try {
+        await octokit.rest.pulls.create({ ...context.repo, title, head, base, body, });
+    }
+    catch (error) {
+        if ((_a = error.message) === null || _a === void 0 ? void 0 : _a.includes(`A pull request already exists for`)) {
+            core.error(`A pull request for ${head} already exists. The branch was updated.`);
+        }
+        else {
+            throw error;
+        }
+    }
+}
+async function downloadPatcherBinary(octokit, owner, repo, tag, ghToken) {
+    core.info(`Downloading Patcher version ${tag}`);
+    const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag });
+    const re = new RegExp(`${osPlatform()}.*amd64`);
+    const asset = getReleaseResponse.data.assets.find((obj) => (re.test(obj.name)));
+    if (!asset) {
+        throw new Error(`Can not find Patcher release for ${tag} in platform ${re}.`);
+    }
+    // Use @actions/tool-cache to download Patcher's binary from GitHub
+    const patcherBinaryPath = await toolCache.downloadTool(asset.url, PATCHER_BINARY_PATH, `token ${ghToken}`, {
+        accept: 'application/octet-stream'
+    });
+    core.debug(`Patcher version '${tag}' has been downloaded at ${patcherBinaryPath}`);
+    return patcherBinaryPath;
+}
+function isPatcherCommandValid(command) {
+    return VALID_COMMANDS.includes(command);
+}
+function updateArgs(updateStrategy, dependency, workingDir) {
+    let args = ["update", NO_COLOR_FLAG, NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
+    // If updateStrategy or dependency are not empty, are not empty, assign them with the appropriate flag.
+    // If they are invalid, Patcher will return an error, which will cause the Action to fail.
+    if (updateStrategy !== "") {
+        args = args.concat(`--update-strategy=${updateStrategy}`);
+    }
+    // If a dependency is provided, set the `target` flag so Patcher can limit the update to a single dependency.
+    if (dependency !== "") {
+        args = args.concat(`--target=${dependency}`);
+    }
+    return args.concat([workingDir]);
+}
+function getPatcherEnvVars(token) {
+    const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
+    return {
+        "GITHUB_OAUTH_TOKEN": token,
+        "PATCHER_TELEMETRY_ID": telemetryId,
+        "HOME": "."
+    };
+}
+async function runPatcher(binaryPath, command, { updateStrategy, dependency, workingDir, token }) {
+    switch (command) {
+        case REPORT_COMMAND:
+            core.startGroup("Running 'patcher report'");
+            const reportOutput = await exec.getExecOutput(binaryPath, [command, NON_INTERACTIVE_FLAG, workingDir], { env: getPatcherEnvVars(token) });
+            core.endGroup();
+            core.startGroup("Setting 'dependencies' output");
+            core.setOutput("dependencies", reportOutput.stdout);
+            core.endGroup();
+            return;
+        default:
+            core.startGroup("Running 'patcher update'");
+            const updateOutput = await exec.getExecOutput(binaryPath, updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
+            core.endGroup();
+            core.startGroup("Opening pull request");
+            await openPullRequest(updateOutput.stdout, dependency, token);
+            core.endGroup();
+            return;
+    }
+}
+async function run() {
+    const token = core.getInput("github_token");
+    // Patcher will default to UPDATE_COMMAND.
+    const command = core.getInput("patcher_command") || UPDATE_COMMAND;
+    const updateStrategy = core.getInput("update_strategy");
+    const dependency = core.getInput("dependency");
+    const workingDir = core.getInput("working_dir");
+    if (!isPatcherCommandValid(command)) {
+        throw new Error(`Invalid Patcher command ${command}`);
+    }
+    core.info(`Patcher's ${command}' command will be executed.`);
+    core.startGroup("Download Patcher");
+    const octokit = github.getOctokit(token);
+    const patcherPath = await downloadPatcherBinary(octokit, GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, PATCHER_VERSION, token);
+    core.endGroup();
+    core.startGroup("Granting permissions to Patcher's binary");
+    await exec.exec("chmod", ["+x", patcherPath]);
+    core.endGroup();
+    await runPatcher(patcherPath, command, { updateStrategy, dependency, workingDir, token });
+}
+exports.run = run;
+
+
+/***/ }),
+
+/***/ 6144:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const core = __importStar(__nccwpck_require__(2186));
+const action_1 = __nccwpck_require__(7672);
+(async () => {
+    try {
+        await (0, action_1.run)();
+    }
+    catch (e) {
+        core.setFailed(`Action failed with "${e}"`);
+    }
+})();
+
+
+/***/ }),
+
 /***/ 2877:
 /***/ ((module) => {
 
@@ -13689,243 +13911,17 @@ module.exports = JSON.parse('[[[0,44],"disallowed_STD3_valid"],[[45,46],"valid"]
 /******/ 	}
 /******/ 	
 /************************************************************************/
-/******/ 	/* webpack/runtime/make namespace object */
-/******/ 	(() => {
-/******/ 		// define __esModule on exports
-/******/ 		__nccwpck_require__.r = (exports) => {
-/******/ 			if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
-/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
-/******/ 			}
-/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
-/******/ 		};
-/******/ 	})();
-/******/ 	
 /******/ 	/* webpack/runtime/compat */
 /******/ 	
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
 /******/ 	
 /************************************************************************/
-var __webpack_exports__ = {};
-// This entry need to be wrapped in an IIFE because it need to be in strict mode.
-(() => {
-"use strict";
-// ESM COMPAT FLAG
-__nccwpck_require__.r(__webpack_exports__);
-
-// EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
-var core = __nccwpck_require__(2186);
-// EXTERNAL MODULE: external "os"
-var external_os_ = __nccwpck_require__(2037);
-// EXTERNAL MODULE: ./node_modules/@actions/github/lib/github.js
-var github = __nccwpck_require__(5438);
-// EXTERNAL MODULE: ./node_modules/@actions/tool-cache/lib/tool-cache.js
-var tool_cache = __nccwpck_require__(7784);
-// EXTERNAL MODULE: ./node_modules/@actions/exec/lib/exec.js
-var exec = __nccwpck_require__(1514);
-;// CONCATENATED MODULE: ./src/action.js
-
-
-
-
-
-
-
-// Define consts
-
-const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
-const PATCHER_GITHUB_REPO = "patcher-cli";
-const patcherVersion = "v0.4.3";
-
-const PATCHER_BINARY_PATH = "/tmp/patcher"
-
-const reportCommand = "report";
-const updateCommand = "update";
-
-const nonInteractiveFlag = "--non-interactive"
-const noColorFlag = "--no-color"
-const skipContainerFlag = "--skip-container-runtime"
-
-function osPlatform() {
-    switch (external_os_.platform()) {
-        case "linux":
-            return "linux";
-        case "darwin":
-            return "darwin";
-        default:
-            core.setFailed("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
-            return;
-    }
-}
-
-async function openPullRequest(output, dependency, ghToken) {
-    const head = `patcher-updates-${dependency}`
-    const title = `[Patcher] Update ${dependency}`
-    const commitMessage = "Update dependencies using Patcher"
-    const commitAuthor = "Grunty"
-    const commitEmail = "grunty@gruntwork.io"
-
-    const body = `
-Updated the \`${dependency}\` dependency using Patcher.
-
-### Update summary
-\`\`\`yaml
-${output}
-\`\`\`
-`
-
-    await exec.exec("git", ["config", "user.name", commitAuthor])
-    await exec.exec("git", ["config", "user.email", commitEmail])
-    await exec.exec("git", ["add", "."])
-    await exec.exec("git", ["commit", "-m", commitMessage])
-    await exec.exec("git", ["checkout", "-b", head])
-
-    const context = github.context;
-
-    await exec.exec("git", ["push", "-f", `https://${ghToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
-
-    const octokit = new github.getOctokit(ghToken);
-
-    const repoDetails = await octokit.rest.repos.get({ ...context.repo });
-    const base = repoDetails.data.default_branch;
-    core.debug(`Base branch is ${base}. Opening the PR against it.`)
-
-    try {
-        await octokit.rest.pulls.create({ ...context.repo, title, head, base, body, });
-    } catch (error) {
-        if (error.message?.includes(`A pull request already exists for`)) {
-            core.error(`A pull request for ${head} already exists. The branch was updated.`)
-        } else {
-            throw error
-        }
-    }
-}
-
-async function downloadRelease(owner, repo, tag, ghToken) {
-    core.info(`Downloading Patcher version ${patcherVersion}`);
-
-    const octokit = new github.getOctokit(ghToken);
-
-    const getReleaseUrl = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag })
-
-    const re = new RegExp(`${osPlatform()}.*amd64`)
-    let asset = getReleaseUrl.data.assets.find(obj => {
-        return re.test(obj.name)
-    })
-
-    const path =  await tool_cache.downloadTool(asset.url,
-        PATCHER_BINARY_PATH,
-        `token ${ghToken}`,
-        {
-            accept: 'application/octet-stream'
-        }
-    );
-
-    core.debug(`Patcher version '${patcherVersion}' has been downloaded at ${path}`);
-    return path
-}
-
-function validateCommand(command) {
-    switch (command) {
-        case "":
-        case "update":
-            return updateCommand;
-        case "report":
-            return reportCommand;
-        default:
-            core.setFailed("Unsupported command - only 'update' and 'report' are supported.");
-            return;
-    }
-}
-
-function updateArgs(updateStrategy, dependency, workingDir) {
-    let args = ["update", noColorFlag, nonInteractiveFlag, skipContainerFlag];
-
-    // If updateStrategy or dependency are not empty, are not empty, assign them with the appropriate flag.
-    // If they are invalid, Patcher will return an error, which will cause the Action to fail.
-    if (updateStrategy !== "") {
-        args = args.concat(`--update-strategy=${updateStrategy}`)
-    }
-
-    // If a dependency is provided, set the `target` flag so Patcher can limit the update to a single dependency.
-    if (dependency !== "") {
-        args = args.concat(`--target=${dependency}`)
-    }
-
-    return args.concat([workingDir]);
-}
-
-function getPatcherEnvVars(token) {
-    const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
-
-    return {
-        "GITHUB_OAUTH_TOKEN": token,
-        "PATCHER_TELEMETRY_ID": telemetryId,
-        "HOME": "."
-    };
-}
-
-async function runPatcher(binaryPath, command, {updateStrategy, dependency, patcherWorkingDir, token}) {
-    switch(command) {
-        case reportCommand:
-            core.startGroup("Running 'patcher report'")
-            const reportOutput = await exec.getExecOutput(binaryPath,
-                [command, nonInteractiveFlag, patcherWorkingDir],
-                { env: getPatcherEnvVars(token) });
-            core.endGroup()
-
-            core.startGroup("Setting 'dependencies' output")
-            core.setOutput("dependencies", reportOutput.stdout)
-            core.endGroup()
-
-            return
-        default:
-            core.startGroup("Running 'patcher update'")
-            const updateOutput = await exec.getExecOutput(binaryPath,
-                updateArgs(updateStrategy, dependency, patcherWorkingDir),
-                { env: getPatcherEnvVars(token) });
-            core.endGroup()
-
-            core.startGroup("Opening pull request")
-            await openPullRequest(updateOutput.stdout, dependency, token)
-            core.endGroup()
-    }
-}
-
-async function run() {
-    const token = core.getInput("github_token")
-    const patcherCommand = core.getInput("patcher_command")
-    const updateStrategy = core.getInput("update_strategy")
-    const dependency = core.getInput("dependency")
-    const patcherWorkingDir = core.getInput("working_dir")
-
-    const command = validateCommand(patcherCommand);
-
-    core.info(`Patcher's ${command}' command will be executed.`);
-
-    core.startGroup("Download Patcher")
-    const patcherPath = await downloadRelease(GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, patcherVersion, token);
-    core.endGroup()
-
-    core.startGroup("Granting permissions to Patcher's binary")
-    await exec.exec("chmod", ["+x", patcherPath])
-    core.endGroup()
-
-    await runPatcher(patcherPath, command, {updateStrategy, dependency, patcherWorkingDir, token})
-}
-
-;// CONCATENATED MODULE: ./src/index.js
-
-
-
-(async () => {
-  try {
-    await run();
-  } catch (e) {
-    core.setFailed(`Action failed with "${e}"`);
-  }
-})();
-})();
-
-module.exports = __webpack_exports__;
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module is referenced by other modules so it can't be inlined
+/******/ 	var __webpack_exports__ = __nccwpck_require__(6144);
+/******/ 	module.exports = __webpack_exports__;
+/******/ 	
 /******/ })()
 ;

@@ -14,24 +14,25 @@ const PATCHER_BINARY_PATH = "/tmp/patcher"
 
 const REPORT_COMMAND = "report";
 const UPDATE_COMMAND = "update";
+const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
 
 const NON_INTERACTIVE_FLAG = "--non-interactive"
 const NO_COLOR_FLAG = "--no-color"
 const SKIP_CONTAINER_FLAG = "--skip-container-runtime"
 
 function osPlatform() {
-    switch (os.platform()) {
+    const platform = os.platform();
+    switch (platform) {
         case "linux":
-            return "linux";
         case "darwin":
-            return "darwin";
+            return platform;
         default:
             core.setFailed("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
             return;
     }
 }
 
-async function openPullRequest(patcherRawOutput, dependency, ghToken) {
+async function openPullRequest(patcherRawOutput: string, dependency: string, ghToken: string) {
     const head = `patcher-updates-${dependency}`
     const title = `[Patcher] Update ${dependency}`
     const commitMessage = "Update dependencies using Patcher"
@@ -57,7 +58,7 @@ ${patcherRawOutput}
 
     await exec.exec("git", ["push", "-f", `https://${ghToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
 
-    const octokit = new github.getOctokit(ghToken);
+    const octokit = github.getOctokit(ghToken);
 
     const repoDetails = await octokit.rest.repos.get({ ...context.repo });
     const base = repoDetails.data.default_branch;
@@ -65,7 +66,7 @@ ${patcherRawOutput}
 
     try {
         await octokit.rest.pulls.create({ ...context.repo, title, head, base, body, });
-    } catch (error) {
+    } catch (error: any) {
         if (error.message?.includes(`A pull request already exists for`)) {
             core.error(`A pull request for ${head} already exists. The branch was updated.`)
         } else {
@@ -74,20 +75,21 @@ ${patcherRawOutput}
     }
 }
 
-async function downloadPatcherBinary(owner, repo, tag, ghToken) {
+async function downloadPatcherBinary(octokit: any, owner: string, repo: string, tag: string, ghToken: string): Promise<string> {
     core.info(`Downloading Patcher version ${tag}`);
 
-    const octokit = new github.getOctokit(ghToken);
 
     const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag })
 
     const re = new RegExp(`${osPlatform()}.*amd64`)
-    let asset = getReleaseResponse.data.assets.find(obj => {
-        return re.test(obj.name)
-    })
+    const asset = getReleaseResponse.data.assets.find((obj: any) => (re.test(obj.name)));
+
+    if (!asset) {
+        throw new Error(`Can not find Patcher release for ${tag} in platform ${re}.`)
+    }
 
     // Use @actions/tool-cache to download Patcher's binary from GitHub
-    const patcherBinaryPath =  await toolCache.downloadTool(asset.url,
+    const patcherBinaryPath = await toolCache.downloadTool(asset.url,
         PATCHER_BINARY_PATH,
         `token ${ghToken}`,
         {
@@ -96,23 +98,14 @@ async function downloadPatcherBinary(owner, repo, tag, ghToken) {
     );
 
     core.debug(`Patcher version '${tag}' has been downloaded at ${patcherBinaryPath}`);
-    return patcherBinaryPath
+    return patcherBinaryPath;
 }
 
-function validateCommand(command) {
-    switch (command) {
-        case "":
-        case "update":
-            return UPDATE_COMMAND;
-        case "report":
-            return REPORT_COMMAND;
-        default:
-            core.setFailed("Unsupported command - only 'update' and 'report' are supported.");
-            return;
-    }
+function isPatcherCommandValid(command: string): boolean {
+    return VALID_COMMANDS.includes(command);
 }
 
-function updateArgs(updateStrategy, dependency, workingDir) {
+function updateArgs(updateStrategy: string, dependency: string, workingDir: string): string[] {
     let args = ["update", NO_COLOR_FLAG, NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
 
     // If updateStrategy or dependency are not empty, are not empty, assign them with the appropriate flag.
@@ -129,7 +122,7 @@ function updateArgs(updateStrategy, dependency, workingDir) {
     return args.concat([workingDir]);
 }
 
-function getPatcherEnvVars(token) {
+function getPatcherEnvVars(token: string): { [key: string]: string } {
     const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
 
     return {
@@ -139,12 +132,19 @@ function getPatcherEnvVars(token) {
     };
 }
 
-async function runPatcher(binaryPath, command, {updateStrategy, dependency, patcherWorkingDir, token}) {
+type PatcherCliArgs = {
+    updateStrategy: string;
+    dependency: string;
+    workingDir: string;
+    token: string;
+}
+
+async function runPatcher(binaryPath: string, command: string, {updateStrategy, dependency, workingDir, token}: PatcherCliArgs): Promise<void> {
     switch(command) {
         case REPORT_COMMAND:
             core.startGroup("Running 'patcher report'")
             const reportOutput = await exec.getExecOutput(binaryPath,
-                [command, NON_INTERACTIVE_FLAG, patcherWorkingDir],
+                [command, NON_INTERACTIVE_FLAG, workingDir],
                 { env: getPatcherEnvVars(token) });
             core.endGroup()
 
@@ -156,34 +156,42 @@ async function runPatcher(binaryPath, command, {updateStrategy, dependency, patc
         default:
             core.startGroup("Running 'patcher update'")
             const updateOutput = await exec.getExecOutput(binaryPath,
-                updateArgs(updateStrategy, dependency, patcherWorkingDir),
+                updateArgs(updateStrategy, dependency, workingDir),
                 { env: getPatcherEnvVars(token) });
             core.endGroup()
 
             core.startGroup("Opening pull request")
             await openPullRequest(updateOutput.stdout, dependency, token)
             core.endGroup()
+
+            return
     }
 }
 
 export async function run() {
     const token = core.getInput("github_token")
-    const patcherCommand = core.getInput("patcher_command")
+    // Patcher will default to UPDATE_COMMAND.
+    const command = core.getInput("patcher_command") || UPDATE_COMMAND
     const updateStrategy = core.getInput("update_strategy")
     const dependency = core.getInput("dependency")
-    const patcherWorkingDir = core.getInput("working_dir")
+    const workingDir = core.getInput("working_dir")
 
-    const command = validateCommand(patcherCommand);
+    if (!isPatcherCommandValid(command)) {
+       throw new Error(`Invalid Patcher command ${command}`)
+    }
 
     core.info(`Patcher's ${command}' command will be executed.`);
 
     core.startGroup("Download Patcher")
-    const patcherPath = await downloadPatcherBinary(GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, PATCHER_VERSION, token);
+
+    const octokit = github.getOctokit(token);
+    const patcherPath = await downloadPatcherBinary(octokit, GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, PATCHER_VERSION, token);
+
     core.endGroup()
 
     core.startGroup("Granting permissions to Patcher's binary")
     await exec.exec("chmod", ["+x", patcherPath])
     core.endGroup()
 
-    await runPatcher(patcherPath, command, {updateStrategy, dependency, patcherWorkingDir, token})
+    await runPatcher(patcherPath, command, {updateStrategy, dependency, workingDir, token})
 }
