@@ -16,7 +16,6 @@ jobs:
         id: run-report
         uses: ./
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           patcher_command: report
 
 
@@ -31,6 +30,5 @@ jobs:
       - name: Patcher
         uses: ./
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           patcher_command: update
           dependency: ${{ matrix.dependency }}

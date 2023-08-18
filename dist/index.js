@@ -13649,7 +13649,7 @@ function getPatcherEnvVars(token) {
         // exec.getExecOutput does not contain a $HOME environment variable.
         // Using a path that looks a reasonable default given the GitHub Action environment variables:
         // https://docs.github.com/en/actions/learn-github-actions/variables.
-        "HOME": "/home/runner"
+        "HOME": "/home"
     };
 }
 async function runPatcher(octokit, gitCommiter, binaryPath, command, { updateStrategy, dependency, workingDir, token }) {

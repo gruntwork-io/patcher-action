@@ -170,7 +170,7 @@ function getPatcherEnvVars(token: string): { [key: string]: string } {
     // exec.getExecOutput does not contain a $HOME environment variable.
     // Using a path that looks a reasonable default given the GitHub Action environment variables:
     // https://docs.github.com/en/actions/learn-github-actions/variables.
-    "HOME": "/home/runner"
+    "HOME": "/home"
   };
 }
 

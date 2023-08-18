@@ -13,9 +13,7 @@ It will run `patcher update` in the whole repo, and open a Pull Request with the
 ```yaml
 steps:
   - uses: actions/checkout@v3
-  - uses: gruntwork-io/patcher
-    with:
-      github_token: ${{ secrets.GITHUB_TOKEN }}
+  - uses: gruntwork-io/patcher-action
 ```
 
 ### Action inputs
