@@ -1,0 +1,34 @@
+name: 'Patcher Tests'
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  patcher-report:
+    runs-on: ubuntu-latest
+    outputs:
+      dependencies: ${{ steps.run-report.outputs.dependencies }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Patcher
+        id: run-report
+        uses: ./
+        with:
+          patcher_command: report
+
+
+  patcher-update:
+    needs: [patcher-report]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dependency: ${{ fromJson(needs.patcher-report.outputs.dependencies) }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Patcher
+        uses: ./
+        with:
+          patcher_command: update
+          dependency: ${{ matrix.dependency }}
