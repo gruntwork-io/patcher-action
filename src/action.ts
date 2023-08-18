@@ -6,11 +6,11 @@ import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/types";
 
-// Define consts
+// Define constants
+
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
 const PATCHER_VERSION = "v0.4.3";
-
 const PATCHER_BINARY_PATH = "/tmp/patcher"
 
 const REPORT_COMMAND = "report";
@@ -20,6 +20,20 @@ const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
 const NON_INTERACTIVE_FLAG = "--non-interactive"
 const NO_COLOR_FLAG = "--no-color"
 const SKIP_CONTAINER_FLAG = "--skip-container-runtime"
+
+// Define types
+
+type PatcherCliArgs = {
+  updateStrategy: string;
+  dependency: string;
+  workingDir: string;
+  token: string;
+}
+
+type GitCommitter = {
+  name: string;
+  email: string;
+}
 
 function osPlatform() {
   const platform = os.platform();
@@ -32,7 +46,7 @@ function osPlatform() {
   }
 }
 
-function branchName(dependency: string, workingDir: string): string {
+function pullRequestBranch(dependency: string, workingDir: string): string {
   let branch = "patcher-updates"
 
   if (dependency) {
@@ -46,12 +60,28 @@ function branchName(dependency: string, workingDir: string): string {
   return branch;
 }
 
-async function openPullRequest(octokit: GitHub, patcherRawOutput: string, dependency: string, workingDir: string, ghToken: string) {
-  const head = branchName(dependency, workingDir)
-  const title = `[Patcher] Update ${dependency}`
-  const commitMessage = "Update dependencies using Patcher"
-  const commitAuthor = "Grunty"
-  const commitEmail = "grunty@gruntwork.io"
+function pullRequestTitle(dependency: string, workingDir: string): string {
+  let title = "[Patcher]"
+
+  if (workingDir) {
+    title += ` [${workingDir}]`
+  }
+
+  if (dependency) {
+    title += ` Update ${dependency} dependency`
+  } else {
+    title += " Update dependencies"
+  }
+
+  return title
+}
+
+async function openPullRequest(octokit: GitHub, gitCommiter: GitCommitter, patcherRawOutput: string, dependency: string, workingDir: string, token: string) {
+  const context = github.context;
+
+  const head = pullRequestBranch(dependency, workingDir)
+  const title = pullRequestTitle(dependency, workingDir)
+  const commitMessage = "Update dependencies using Patcher by Gruntwork"
 
   const body = `
 Updated the \`${dependency}\` dependency using Patcher.
@@ -62,15 +92,13 @@ ${patcherRawOutput}
 \`\`\`
 `
 
-  await exec.exec("git", ["config", "user.name", commitAuthor])
-  await exec.exec("git", ["config", "user.email", commitEmail])
+  await exec.exec("git", ["config", "user.name", gitCommiter.name])
+  await exec.exec("git", ["config", "user.email", gitCommiter.email])
   await exec.exec("git", ["add", "."])
-  await exec.exec("git", ["commit", "-m", commitMessage])
   await exec.exec("git", ["checkout", "-b", head])
+  await exec.exec("git", ["commit", "-m", commitMessage])
 
-  const context = github.context;
-
-  await exec.exec("git", ["push", "-f", `https://${ghToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
+  await exec.exec("git", ["push", "-f", `https://${token}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
 
   const repoDetails = await octokit.rest.repos.get({...context.repo});
   const base = repoDetails.data.default_branch;
@@ -87,9 +115,8 @@ ${patcherRawOutput}
   }
 }
 
-async function downloadPatcherBinary(octokit: GitHub, owner: string, repo: string, tag: string, ghToken: string): Promise<string> {
+async function downloadPatcherBinary(octokit: GitHub, owner: string, repo: string, tag: string, token: string): Promise<string> {
   core.info(`Downloading Patcher version ${tag}`);
-
 
   const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({owner, repo, tag})
 
@@ -103,7 +130,7 @@ async function downloadPatcherBinary(octokit: GitHub, owner: string, repo: strin
   // Use @actions/tool-cache to download Patcher's binary from GitHub
   const patcherBinaryPath = await toolCache.downloadTool(asset.url,
     PATCHER_BINARY_PATH,
-    `token ${ghToken}`,
+    `token ${token}`,
     {
       accept: 'application/octet-stream'
     }
@@ -140,18 +167,14 @@ function getPatcherEnvVars(token: string): { [key: string]: string } {
   return {
     "GITHUB_OAUTH_TOKEN": token,
     "PATCHER_TELEMETRY_ID": telemetryId,
-    "HOME": "."
+    // exec.getExecOutput does not contain a $HOME environment variable.
+    // Using a path that looks a reasonable default given the GitHub Action environment variables:
+    // https://docs.github.com/en/actions/learn-github-actions/variables.
+    "HOME": "/home/runner"
   };
 }
 
-type PatcherCliArgs = {
-  updateStrategy: string;
-  dependency: string;
-  workingDir: string;
-  token: string;
-}
-
-async function runPatcher(octokit: GitHub, binaryPath: string, command: string, {
+async function runPatcher(octokit: GitHub, gitCommiter: GitCommitter, binaryPath: string, command: string, {
   updateStrategy,
   dependency,
   workingDir,
@@ -178,24 +201,44 @@ async function runPatcher(octokit: GitHub, binaryPath: string, command: string, 
       core.endGroup()
 
       core.startGroup("Opening pull request")
-      await openPullRequest(octokit, updateOutput.stdout, dependency, workingDir, token)
+      await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token)
       core.endGroup()
 
       return
   }
 }
 
+function parseCommitAuthor(commitAuthor: string): GitCommitter {
+  const pattern = new RegExp(/^([^<]+)\s+<([^>]+)>$/);
+  core.debug(`pattern test is  ${pattern.test(commitAuthor)}`)
+
+  const match = commitAuthor.match(pattern);
+
+  if (match) {
+    const name = match[1];
+    const email = match[2];
+
+    core.debug(`Committer data is ${commitAuthor} -> '${name}' '${email}'`)
+
+    return { name, email };
+  }
+
+  throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`)
+}
+
 export async function run() {
   const token = core.getInput("github_token")
-  // Patcher will default to UPDATE_COMMAND.
-  const command = core.getInput("patcher_command") || UPDATE_COMMAND
+  const command = core.getInput("patcher_command")
   const updateStrategy = core.getInput("update_strategy")
   const dependency = core.getInput("dependency")
   const workingDir = core.getInput("working_dir")
+  const commitAuthor = core.getInput("commit_author")
 
   if (!isPatcherCommandValid(command)) {
     throw new Error(`Invalid Patcher command ${command}`)
   }
+
+  const gitCommiter = parseCommitAuthor(commitAuthor);
 
   core.info(`Patcher's ${command}' command will be executed.`);
 
@@ -211,5 +254,5 @@ export async function run() {
   await exec.exec("chmod", ["+x", patcherPath])
   core.endGroup()
 
-  await runPatcher(octokit, patcherPath, command, {updateStrategy, dependency, workingDir, token})
+  await runPatcher(octokit, gitCommiter, patcherPath, command, {updateStrategy, dependency, workingDir, token})
 }

@@ -1,19 +1,27 @@
-name: "Patcher Action"
-description: "Run Patcher commands"
-author: "Gruntwork.io <grunty@gruntwork.io>"
+name: "Gruntwork Patcher"
+description: "Setup and run Patcher to update Terraform and Terragrunt dependencies."
+author: "Gruntwork"
 
 inputs:
   github_token:
-    description: "GitHub token"
-    required: true
+    description: "GitHub's Personal Access Token (PAT). Defaults to GITHUB_TOKEN."
+    default: ${{ github.token }}
   patcher_command:
-    description: "Patcher command to run. Valid options: 'update' or 'report'. Defaults to 'update'."
+    description: "Patcher command to run. Valid options: 'update' or 'report'."
+    default: "update"
   update_strategy:
     description: "Update strategy. Only used when running 'update'. Defaults to 'next-safe'."
   dependency:
-    description: "Target the update to a single dependency. Format: <org>/<repo>/<name>. Example: gruntwork-io/terraform-aws-service-catalog/services/ecs-module."
+    description: >
+      "Target the update to a single dependency. Format: <org>/<repo>/<name>."
+      "Example: gruntwork-io/terraform-aws-service-catalog/services/ecs-module."
   working_dir:
     description: "Directory where Patcher should run. If empty, it will run in the whole repo."
+  commit_author:
+    description: >
+      "Author of the Pull Request's commits in the format 'Name <name@email.com>'. The permissions to push the changes
+      "and create the Pull Request are from 'github_token'. Defaults to gruntwork-patcher."
+    default: 'gruntwork-patcher <patcher@gruntwork.io>'
 
 outputs:
   dependencies:

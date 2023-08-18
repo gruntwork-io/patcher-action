@@ -13531,7 +13531,7 @@ const github = __importStar(__nccwpck_require__(5438));
 const toolCache = __importStar(__nccwpck_require__(7784));
 const core = __importStar(__nccwpck_require__(2186));
 const exec = __importStar(__nccwpck_require__(1514));
-// Define consts
+// Define constants
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
 const PATCHER_VERSION = "v0.4.3";
@@ -13549,17 +13549,38 @@ function osPlatform() {
         case "darwin":
             return platform;
         default:
-            core.setFailed("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
-            return;
+            throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
     }
 }
-async function openPullRequest(octokit, patcherRawOutput, dependency, ghToken) {
+function pullRequestBranch(dependency, workingDir) {
+    let branch = "patcher-updates";
+    if (dependency) {
+        branch += `-${dependency}`;
+    }
+    if (workingDir) {
+        branch += `-${workingDir}`;
+    }
+    return branch;
+}
+function pullRequestTitle(dependency, workingDir) {
+    let title = "[Patcher]";
+    if (workingDir) {
+        title += ` [${workingDir}]`;
+    }
+    if (dependency) {
+        title += ` Update ${dependency} dependency`;
+    }
+    else {
+        title += " Update dependencies";
+    }
+    return title;
+}
+async function openPullRequest(octokit, gitCommiter, patcherRawOutput, dependency, workingDir, token) {
     var _a;
-    const head = `patcher-updates-${dependency}`;
-    const title = `[Patcher] Update ${dependency}`;
-    const commitMessage = "Update dependencies using Patcher";
-    const commitAuthor = "Grunty";
-    const commitEmail = "grunty@gruntwork.io";
+    const context = github.context;
+    const head = pullRequestBranch(dependency, workingDir);
+    const title = pullRequestTitle(dependency, workingDir);
+    const commitMessage = "Update dependencies using Patcher by Gruntwork";
     const body = `
 Updated the \`${dependency}\` dependency using Patcher.
 
@@ -13568,13 +13589,12 @@ Updated the \`${dependency}\` dependency using Patcher.
 ${patcherRawOutput}
 \`\`\`
 `;
-    await exec.exec("git", ["config", "user.name", commitAuthor]);
-    await exec.exec("git", ["config", "user.email", commitEmail]);
+    await exec.exec("git", ["config", "user.name", gitCommiter.name]);
+    await exec.exec("git", ["config", "user.email", gitCommiter.email]);
     await exec.exec("git", ["add", "."]);
-    await exec.exec("git", ["commit", "-m", commitMessage]);
     await exec.exec("git", ["checkout", "-b", head]);
-    const context = github.context;
-    await exec.exec("git", ["push", "-f", `https://${ghToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`]);
+    await exec.exec("git", ["commit", "-m", commitMessage]);
+    await exec.exec("git", ["push", "-f", `https://${token}@github.com/${context.repo.owner}/${context.repo.repo}.git`]);
     const repoDetails = await octokit.rest.repos.get({ ...context.repo });
     const base = repoDetails.data.default_branch;
     core.debug(`Base branch is ${base}. Opening the PR against it.`);
@@ -13590,7 +13610,7 @@ ${patcherRawOutput}
         }
     }
 }
-async function downloadPatcherBinary(octokit, owner, repo, tag, ghToken) {
+async function downloadPatcherBinary(octokit, owner, repo, tag, token) {
     core.info(`Downloading Patcher version ${tag}`);
     const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag });
     const re = new RegExp(`${osPlatform()}.*amd64`);
@@ -13599,7 +13619,7 @@ async function downloadPatcherBinary(octokit, owner, repo, tag, ghToken) {
         throw new Error(`Can not find Patcher release for ${tag} in platform ${re}.`);
     }
     // Use @actions/tool-cache to download Patcher's binary from GitHub
-    const patcherBinaryPath = await toolCache.downloadTool(asset.url, PATCHER_BINARY_PATH, `token ${ghToken}`, {
+    const patcherBinaryPath = await toolCache.downloadTool(asset.url, PATCHER_BINARY_PATH, `token ${token}`, {
         accept: 'application/octet-stream'
     });
     core.debug(`Patcher version '${tag}' has been downloaded at ${patcherBinaryPath}`);
@@ -13626,10 +13646,13 @@ function getPatcherEnvVars(token) {
     return {
         "GITHUB_OAUTH_TOKEN": token,
         "PATCHER_TELEMETRY_ID": telemetryId,
-        "HOME": "."
+        // exec.getExecOutput does not contain a $HOME environment variable.
+        // Using a path that looks a reasonable default given the GitHub Action environment variables:
+        // https://docs.github.com/en/actions/learn-github-actions/variables.
+        "HOME": "/home/runner"
     };
 }
-async function runPatcher(octokit, binaryPath, command, { updateStrategy, dependency, workingDir, token }) {
+async function runPatcher(octokit, gitCommiter, binaryPath, command, { updateStrategy, dependency, workingDir, token }) {
     switch (command) {
         case REPORT_COMMAND:
             core.startGroup("Running 'patcher report'");
@@ -13644,21 +13667,34 @@ async function runPatcher(octokit, binaryPath, command, { updateStrategy, depend
             const updateOutput = await exec.getExecOutput(binaryPath, updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
             core.endGroup();
             core.startGroup("Opening pull request");
-            await openPullRequest(octokit, updateOutput.stdout, dependency, token);
+            await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token);
             core.endGroup();
             return;
     }
 }
+function parseCommitAuthor(commitAuthor) {
+    const pattern = new RegExp(/^([^<]+)\s+<([^>]+)>$/);
+    core.debug(`pattern test is  ${pattern.test(commitAuthor)}`);
+    const match = commitAuthor.match(pattern);
+    if (match) {
+        const name = match[1];
+        const email = match[2];
+        core.debug(`Committer data is ${commitAuthor} -> '${name}' '${email}'`);
+        return { name, email };
+    }
+    throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
+}
 async function run() {
     const token = core.getInput("github_token");
-    // Patcher will default to UPDATE_COMMAND.
-    const command = core.getInput("patcher_command") || UPDATE_COMMAND;
+    const command = core.getInput("patcher_command");
     const updateStrategy = core.getInput("update_strategy");
     const dependency = core.getInput("dependency");
     const workingDir = core.getInput("working_dir");
+    const commitAuthor = core.getInput("commit_author");
     if (!isPatcherCommandValid(command)) {
         throw new Error(`Invalid Patcher command ${command}`);
     }
+    const gitCommiter = parseCommitAuthor(commitAuthor);
     core.info(`Patcher's ${command}' command will be executed.`);
     const octokit = github.getOctokit(token);
     core.startGroup("Download Patcher");
@@ -13667,7 +13703,7 @@ async function run() {
     core.startGroup("Granting permissions to Patcher's binary");
     await exec.exec("chmod", ["+x", patcherPath]);
     core.endGroup();
-    await runPatcher(octokit, patcherPath, command, { updateStrategy, dependency, workingDir, token });
+    await runPatcher(octokit, gitCommiter, patcherPath, command, { updateStrategy, dependency, workingDir, token });
 }
 exports.run = run;
 
