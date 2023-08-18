@@ -18,14 +18,14 @@ steps:
 
 ### Action inputs
 
-| Name              | Description                                                                                                                                                                                              | Default                                    |
-|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------|
-| `github_token`    | GitHub's Personal Access Token (PAT).                                                                                                                                                                    | `GITHUB_TOKEN`                             |
-| `patcher_command` | Patcher command to run. Valid options: `update` or `report`.                                                                                                                                             | `update`                                   |
-| `working_dir`     | Directory where Patcher should run. If empty, it will run in the whole repo.                                                                                                                             |                                            |
-| `update_strategy` | Update strategy. Only used when running `update`. Valid options: `next-safe` or `next-breaking`.                                                                                                         | `next-safe`                                |
-| `dependency`      | Target the update to a single dependency. Only used when running `update`. Format: <org>/<repo>/<name>. Example: gruntwork-io/terraform-aws-service-catalog/services/ecs-module.                         |                                            |
-| `commit_author`   | Author of the Pull Request's commits in the format 'Name <name@email.com>'. Only used when running `update`. The permissions to push the changes and to create the Pull Request are from 'github_token'. | `gruntwork-patcher <patcher@gruntwork.io>` |
+| Name              | Description                                                                                                                                                                                              | Default                                        |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
+| `github_token`    | GitHub's Personal Access Token (PAT).                                                                                                                                                                    | `GITHUB_TOKEN`                                 |
+| `patcher_command` | Patcher command to run. Valid options: `update` or `report`.                                                                                                                                             | `update`                                       |
+| `working_dir`     | Directory where Patcher should run. If empty, it will run in the whole repo.                                                                                                                             |                                                |
+| `update_strategy` | Update strategy. Only used when running `update`. Valid options: `next-safe` or `next-breaking`.                                                                                                         | `next-safe`                                    |
+| `dependency`      | Target the update to a single dependency. Only used when running `update`. Format: `<org>/<repo>/<name>`. Example: `gruntwork-io/terraform-aws-service-catalog/services/ecs-module`.                     |                                                |
+| `commit_author`   | Author of the Pull Request's commits in the format `Name <name@email.com>`. Only used when running `update`. The permissions to push the changes and to create the Pull Request are from 'github_token'. | `gruntwork-patcher-bot <patcher@gruntwork.io>` |
 
 ### Action outputs
 - `dependencies`: Terraform and Terragrunt dependencies from the given directory. Only works for `report`.
