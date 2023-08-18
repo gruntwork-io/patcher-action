@@ -2,6 +2,10 @@ name: "Gruntwork Patcher"
 description: "Setup and run Patcher to update Terraform and Terragrunt dependencies."
 author: "Gruntwork"
 
+branding:
+  icon: chevron-right
+  color: purple
+
 inputs:
   github_token:
     description: "GitHub's Personal Access Token (PAT). Defaults to GITHUB_TOKEN."
