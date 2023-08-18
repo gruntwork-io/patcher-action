@@ -13693,7 +13693,7 @@ async function validateAccessToPatcherCli(octokit) {
     }
     catch (error) {
         if (error.message.includes("Not Found")) {
-            throw Error(`Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork subscriber, contact support@gruntwork.io.`);
+            throw Error(`Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`);
         }
         else {
             throw error;
