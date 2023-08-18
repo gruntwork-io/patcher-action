@@ -13620,7 +13620,7 @@ async function downloadPatcherBinary(octokit, owner, repo, tag, token) {
     }
     // Use @actions/tool-cache to download Patcher's binary from GitHub
     const patcherBinaryPath = await toolCache.downloadTool(asset.url, PATCHER_BINARY_PATH, `token ${token}`, {
-        accept: 'application/octet-stream'
+        accept: "application/octet-stream"
     });
     core.debug(`Patcher version '${tag}' has been downloaded at ${patcherBinaryPath}`);
     return patcherBinaryPath;
@@ -13684,6 +13684,22 @@ function parseCommitAuthor(commitAuthor) {
     }
     throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
 }
+async function validateAccessToPatcherCli(octokit) {
+    try {
+        await octokit.rest.repos.get({
+            owner: GRUNTWORK_GITHUB_ORG,
+            repo: PATCHER_GITHUB_REPO,
+        });
+    }
+    catch (error) {
+        if (error.message.includes("Not Found")) {
+            throw Error(`Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork subscriber, contact support@gruntwork.io.`);
+        }
+        else {
+            throw error;
+        }
+    }
+}
 async function run() {
     const token = core.getInput("github_token");
     const command = core.getInput("patcher_command");
@@ -13691,12 +13707,16 @@ async function run() {
     const dependency = core.getInput("dependency");
     const workingDir = core.getInput("working_dir");
     const commitAuthor = core.getInput("commit_author");
+    // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
+    const octokit = github.getOctokit(token);
+    await validateAccessToPatcherCli(octokit);
+    // Validate if the 'patcher_command' provided is valid.
     if (!isPatcherCommandValid(command)) {
         throw new Error(`Invalid Patcher command ${command}`);
     }
-    const gitCommiter = parseCommitAuthor(commitAuthor);
     core.info(`Patcher's ${command}' command will be executed.`);
-    const octokit = github.getOctokit(token);
+    // Validate if 'commit_author' has a valid format.
+    const gitCommiter = parseCommitAuthor(commitAuthor);
     core.startGroup("Download Patcher");
     const patcherPath = await downloadPatcherBinary(octokit, GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, PATCHER_VERSION, token);
     core.endGroup();

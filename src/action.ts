@@ -232,9 +232,9 @@ async function validateAccessToPatcherCli(octokit: GitHub) {
       owner: GRUNTWORK_GITHUB_ORG,
       repo: PATCHER_GITHUB_REPO,
     });
-  } catch (error) {
-    if (error.message.includes("not found")) {
-      throw Error(`Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork subscriber, `)
+  } catch (error: any) {
+    if (error.message.includes("Not Found")) {
+      throw Error(`Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork subscriber, contact support@gruntwork.io.`)
     } else {
       throw error;
     }
