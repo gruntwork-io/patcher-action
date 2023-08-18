@@ -2,8 +2,8 @@
 A GitHub Action for running Patcher.
 
 > [!IMPORTANT]
-> Patcher is in beta and only available to Gruntwork subscribers, contact our Sales team sales@gruntwork.io if you have interest
-> in using Patcher to update your Terraform/Terragrunt dependencies.
+> Patcher is currently in beta and is only available to Gruntwork customers. If you're interested in using Patcher to update your
+> Terraform/Terragrunt dependencies, please contact our sales team at sales@gruntwork.io.
 
 You can find out more about Gruntwork Patcher at [gruntwork.io](https://gruntwork.io/patcher) and by reading the [latest docs](https://docs.gruntwork.io/patcher/).
 
