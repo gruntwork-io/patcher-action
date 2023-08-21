@@ -165,12 +165,9 @@ function getPatcherEnvVars(token: string): { [key: string]: string } {
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
 
   return {
+    ...process.env,
     "GITHUB_OAUTH_TOKEN": token,
     "PATCHER_TELEMETRY_ID": telemetryId,
-    // exec.getExecOutput does not contain a $HOME environment variable.
-    // Using a path that looks a reasonable default given the GitHub Action environment variables:
-    // https://docs.github.com/en/actions/learn-github-actions/variables.
-    "HOME": "/home"
   };
 }
 
