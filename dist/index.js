@@ -13554,11 +13554,11 @@ function osPlatform() {
 }
 function pullRequestBranch(dependency, workingDir) {
     let branch = "patcher-updates";
-    if (dependency) {
-        branch += `-${dependency}`;
-    }
     if (workingDir) {
         branch += `-${workingDir}`;
+    }
+    if (dependency) {
+        branch += `-${dependency}`;
     }
     return branch;
 }
@@ -13575,12 +13575,23 @@ function pullRequestTitle(dependency, workingDir) {
     }
     return title;
 }
+async function commitAndPushChanges(gitCommiter, dependency, workingDir, token) {
+    const { owner, repo } = github.context.repo;
+    const head = pullRequestBranch(dependency, workingDir);
+    await exec.exec("git", ["config", "user.name", gitCommiter.name]);
+    await exec.exec("git", ["config", "user.email", gitCommiter.email]);
+    await exec.exec("git", ["remote", "add", "https-origin", `https://${token}@github.com/${owner}/${repo}.git`]);
+    await exec.exec("git", ["add", "."]);
+    await exec.exec("git", ["checkout", "-b", head]);
+    const commitMessage = "Update dependencies using Patcher by Gruntwork";
+    await exec.exec("git", ["commit", "-m", commitMessage]);
+    await exec.exec("git", ["push", "--force", "https-origin", `${head}:refs/heads/${head}`]);
+}
 async function openPullRequest(octokit, gitCommiter, patcherRawOutput, dependency, workingDir, token) {
     var _a;
-    const context = github.context;
+    const { repo } = github.context;
     const head = pullRequestBranch(dependency, workingDir);
     const title = pullRequestTitle(dependency, workingDir);
-    const commitMessage = "Update dependencies using Patcher by Gruntwork";
     const body = `
 Updated the \`${dependency}\` dependency using Patcher.
 
@@ -13589,17 +13600,11 @@ Updated the \`${dependency}\` dependency using Patcher.
 ${patcherRawOutput}
 \`\`\`
 `;
-    await exec.exec("git", ["config", "user.name", gitCommiter.name]);
-    await exec.exec("git", ["config", "user.email", gitCommiter.email]);
-    await exec.exec("git", ["add", "."]);
-    await exec.exec("git", ["checkout", "-b", head]);
-    await exec.exec("git", ["commit", "-m", commitMessage]);
-    await exec.exec("git", ["push", "-f", `https://${token}@github.com/${context.repo.owner}/${context.repo.repo}.git`]);
-    const repoDetails = await octokit.rest.repos.get({ ...context.repo });
+    const repoDetails = await octokit.rest.repos.get({ ...repo });
     const base = repoDetails.data.default_branch;
     core.debug(`Base branch is ${base}. Opening the PR against it.`);
     try {
-        await octokit.rest.pulls.create({ ...context.repo, title, head, base, body, });
+        await octokit.rest.pulls.create({ ...repo, title, head, base, body });
     }
     catch (error) {
         if ((_a = error.message) === null || _a === void 0 ? void 0 : _a.includes(`A pull request already exists for`)) {
@@ -13663,6 +13668,9 @@ async function runPatcher(octokit, gitCommiter, binaryPath, command, { updateStr
             core.startGroup("Running 'patcher update'");
             const updateOutput = await exec.getExecOutput(binaryPath, updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
             core.endGroup();
+            core.startGroup("Commit and push changes");
+            await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
+            core.endGroup();
             core.startGroup("Opening pull request");
             await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token);
             core.endGroup();
@@ -13714,7 +13722,7 @@ async function run() {
     core.info(`Patcher's ${command}' command will be executed.`);
     // Validate if 'commit_author' has a valid format.
     const gitCommiter = parseCommitAuthor(commitAuthor);
-    core.startGroup("Download Patcher");
+    core.startGroup("Downloading Patcher");
     const patcherPath = await downloadPatcherBinary(octokit, GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, PATCHER_VERSION, token);
     core.endGroup();
     core.startGroup("Granting permissions to Patcher's binary");

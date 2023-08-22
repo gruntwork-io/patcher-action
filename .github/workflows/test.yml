@@ -17,6 +17,7 @@ jobs:
         uses: ./
         with:
           patcher_command: report
+          working_dir: infrastructure-live
 
 
   patcher-update:
@@ -32,3 +33,4 @@ jobs:
         with:
           patcher_command: update
           dependency: ${{ matrix.dependency }}
+          working_dir: infrastructure-live
