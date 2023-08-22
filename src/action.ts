@@ -49,12 +49,12 @@ function osPlatform() {
 function pullRequestBranch(dependency: string, workingDir: string): string {
   let branch = "patcher-updates"
 
-  if (dependency) {
-    branch += `-${dependency}`
-  }
-
   if (workingDir) {
     branch += `-${workingDir}`
+  }
+
+  if (dependency) {
+    branch += `-${dependency}`
   }
 
   return branch;
@@ -98,7 +98,9 @@ ${patcherRawOutput}
   await exec.exec("git", ["checkout", "-b", head])
   await exec.exec("git", ["commit", "-m", commitMessage])
 
-  await exec.exec("git", ["push", "-f", `https://${token}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
+  // await exec.exec("git", ["push", "--force-with-lease", ])
+  await exec.exec("git", ["remote", "add", "https-origin", `https://${token}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
+  await exec.exec("git", ["push", "-u", "https-origin", head])
 
   const repoDetails = await octokit.rest.repos.get({...context.repo});
   const base = repoDetails.data.default_branch;
