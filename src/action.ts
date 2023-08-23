@@ -46,6 +46,8 @@ function osPlatform() {
   }
 }
 
+// pullRequestBranch formats the branch name. When dependency and workingDir are provided, the branch format will be
+// patcher-dev-updates-gruntwork-io/terraform-aws-vpc/vpc-app`.
 function pullRequestBranch(dependency: string, workingDir: string): string {
   let branch = "patcher"
 
@@ -61,6 +63,8 @@ function pullRequestBranch(dependency: string, workingDir: string): string {
   return branch;
 }
 
+// pullRequestTitle formats the Pull Request title. When dependency and workingDir are provided, the title will be
+// [Patcher] [dev] Update gruntwork-io/terraform-aws-vpc/vpc-app dependency
 function pullRequestTitle(dependency: string, workingDir: string): string {
   let title = "[Patcher]"
 
@@ -263,6 +267,7 @@ export async function run() {
   const workingDir = core.getInput("working_dir")
   const commitAuthor = core.getInput("commit_author")
 
+  // Always mask the `token` string in the logs.
   core.setSecret(token)
 
   // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
