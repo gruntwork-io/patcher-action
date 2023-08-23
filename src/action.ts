@@ -46,20 +46,25 @@ function osPlatform() {
   }
 }
 
+// pullRequestBranch formats the branch name. When dependency and workingDir are provided, the branch format will be
+// patcher-dev-updates-gruntwork-io/terraform-aws-vpc/vpc-app`.
 function pullRequestBranch(dependency: string, workingDir: string): string {
-  let branch = "patcher-updates"
+  let branch = "patcher"
+
+  if (workingDir) {
+    branch += `-${workingDir}`
+  }
+  branch += "-updates"
 
   if (dependency) {
     branch += `-${dependency}`
   }
 
-  if (workingDir) {
-    branch += `-${workingDir}`
-  }
-
   return branch;
 }
 
+// pullRequestTitle formats the Pull Request title. When dependency and workingDir are provided, the title will be
+// [Patcher] [dev] Update gruntwork-io/terraform-aws-vpc/vpc-app dependency
 function pullRequestTitle(dependency: string, workingDir: string): string {
   let title = "[Patcher]"
 
@@ -76,12 +81,32 @@ function pullRequestTitle(dependency: string, workingDir: string): string {
   return title
 }
 
+async function commitAndPushChanges(gitCommiter: GitCommitter, dependency: string, workingDir: string, token: string) {
+  const { owner, repo } = github.context.repo;
+  const head = pullRequestBranch(dependency, workingDir)
+
+  // Setup https auth and https remote url
+  await exec.exec("git", ["remote", "set-url", "origin", `https://${token}@github.com/${owner}/${repo}.git`])
+
+  // Setup committer name and email
+  await exec.exec("git", ["config", "user.name", gitCommiter.name])
+  await exec.exec("git", ["config", "user.email", gitCommiter.email])
+
+  // Checkout to new branch and commit
+  await exec.exec("git", ["checkout", "-b", head])
+  await exec.exec("git", ["add", "."])
+  const commitMessage = "Update dependencies using Patcher by Gruntwork"
+  await exec.exec("git", ["commit", "-m", commitMessage])
+
+  // Push changes to head branch
+  await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`])
+}
+
 async function openPullRequest(octokit: GitHub, gitCommiter: GitCommitter, patcherRawOutput: string, dependency: string, workingDir: string, token: string) {
-  const context = github.context;
+  const { repo } = github.context;
 
   const head = pullRequestBranch(dependency, workingDir)
   const title = pullRequestTitle(dependency, workingDir)
-  const commitMessage = "Update dependencies using Patcher by Gruntwork"
 
   const body = `
 Updated the \`${dependency}\` dependency using Patcher.
@@ -92,20 +117,12 @@ ${patcherRawOutput}
 \`\`\`
 `
 
-  await exec.exec("git", ["config", "user.name", gitCommiter.name])
-  await exec.exec("git", ["config", "user.email", gitCommiter.email])
-  await exec.exec("git", ["add", "."])
-  await exec.exec("git", ["checkout", "-b", head])
-  await exec.exec("git", ["commit", "-m", commitMessage])
-
-  await exec.exec("git", ["push", "-f", `https://${token}@github.com/${context.repo.owner}/${context.repo.repo}.git`])
-
-  const repoDetails = await octokit.rest.repos.get({...context.repo});
+  const repoDetails = await octokit.rest.repos.get({...repo});
   const base = repoDetails.data.default_branch;
   core.debug(`Base branch is ${base}. Opening the PR against it.`)
 
   try {
-    await octokit.rest.pulls.create({...context.repo, title, head, base, body,});
+    await octokit.rest.pulls.create({...repo, title, head, base, body});
   } catch (error: any) {
     if (error.message?.includes(`A pull request already exists for`)) {
       core.error(`A pull request for ${head} already exists. The branch was updated.`)
@@ -197,6 +214,10 @@ async function runPatcher(octokit: GitHub, gitCommiter: GitCommitter, binaryPath
         {env: getPatcherEnvVars(token)});
       core.endGroup()
 
+      core.startGroup("Commit and push changes")
+      await commitAndPushChanges(gitCommiter, dependency, workingDir, token)
+      core.endGroup()
+
       core.startGroup("Opening pull request")
       await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token)
       core.endGroup()
@@ -246,6 +267,9 @@ export async function run() {
   const workingDir = core.getInput("working_dir")
   const commitAuthor = core.getInput("commit_author")
 
+  // Always mask the `token` string in the logs.
+  core.setSecret(token)
+
   // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
   const octokit = github.getOctokit(token);
   await validateAccessToPatcherCli(octokit);
@@ -259,7 +283,7 @@ export async function run() {
   // Validate if 'commit_author' has a valid format.
   const gitCommiter = parseCommitAuthor(commitAuthor);
 
-  core.startGroup("Download Patcher")
+  core.startGroup("Downloading Patcher")
   const patcherPath = await downloadPatcherBinary(octokit, GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, PATCHER_VERSION, token);
   core.endGroup()
 
