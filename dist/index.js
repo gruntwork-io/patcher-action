@@ -13552,6 +13552,8 @@ function osPlatform() {
             throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
     }
 }
+// pullRequestBranch formats the branch name. When dependency and workingDir are provided, the branch format will be
+// patcher-dev-updates-gruntwork-io/terraform-aws-vpc/vpc-app`.
 function pullRequestBranch(dependency, workingDir) {
     let branch = "patcher";
     if (workingDir) {
@@ -13563,6 +13565,8 @@ function pullRequestBranch(dependency, workingDir) {
     }
     return branch;
 }
+// pullRequestTitle formats the Pull Request title. When dependency and workingDir are provided, the title will be
+// [Patcher] [dev] Update gruntwork-io/terraform-aws-vpc/vpc-app dependency
 function pullRequestTitle(dependency, workingDir) {
     let title = "[Patcher]";
     if (workingDir) {
@@ -13575,6 +13579,11 @@ function pullRequestTitle(dependency, workingDir) {
         title += " Update dependencies";
     }
     return title;
+}
+async function wasCodeUpdated() {
+    const output = await exec.getExecOutput("git", ["status", "--porcelain"]);
+    // If there are changes, they will appear in the stdout. Otherwise, it returns blank.
+    return !!output.stdout;
 }
 async function commitAndPushChanges(gitCommiter, dependency, workingDir, token) {
     const { owner, repo } = github.context.repo;
@@ -13673,12 +13682,17 @@ async function runPatcher(octokit, gitCommiter, binaryPath, command, { updateStr
             core.startGroup("Running 'patcher update'");
             const updateOutput = await exec.getExecOutput(binaryPath, updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
             core.endGroup();
-            core.startGroup("Commit and push changes");
-            await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
-            core.endGroup();
-            core.startGroup("Opening pull request");
-            await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token);
-            core.endGroup();
+            if (await wasCodeUpdated()) {
+                core.startGroup("Commit and push changes");
+                await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
+                core.endGroup();
+                core.startGroup("Opening pull request");
+                // await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token)
+                core.endGroup();
+            }
+            else {
+                core.info(`No changes in ${dependency} after running Patcher. No further action is necessary.`);
+            }
             return;
     }
 }
@@ -13717,6 +13731,7 @@ async function run() {
     const dependency = core.getInput("dependency");
     const workingDir = core.getInput("working_dir");
     const commitAuthor = core.getInput("commit_author");
+    // Always mask the `token` string in the logs.
     core.setSecret(token);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
     const octokit = github.getOctokit(token);
