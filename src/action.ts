@@ -83,6 +83,12 @@ function pullRequestTitle(dependency: string, workingDir: string): string {
   return title
 }
 
+async function wasCodeUpdated() {
+  const output = await exec.getExecOutput("git", ["status", "--porcelain"])
+  // If there are changes, they will appear in the stdout. Otherwise, it returns blank.
+  return !!output.stdout;
+}
+
 async function commitAndPushChanges(gitCommiter: GitCommitter, dependency: string, workingDir: string, token: string) {
   const { owner, repo } = github.context.repo;
   const head = pullRequestBranch(dependency, workingDir)
@@ -97,11 +103,13 @@ async function commitAndPushChanges(gitCommiter: GitCommitter, dependency: strin
   // Checkout to new branch and commit
   await exec.exec("git", ["checkout", "-b", head])
   await exec.exec("git", ["add", "."])
+
   const commitMessage = "Update dependencies using Patcher by Gruntwork"
   await exec.exec("git", ["commit", "-m", commitMessage])
 
   // Push changes to head branch
   await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`])
+
 }
 
 async function openPullRequest(octokit: GitHub, gitCommiter: GitCommitter, patcherRawOutput: string, dependency: string, workingDir: string, token: string) {
@@ -216,13 +224,17 @@ async function runPatcher(octokit: GitHub, gitCommiter: GitCommitter, binaryPath
         {env: getPatcherEnvVars(token)});
       core.endGroup()
 
-      core.startGroup("Commit and push changes")
-      await commitAndPushChanges(gitCommiter, dependency, workingDir, token)
-      core.endGroup()
+      if (await wasCodeUpdated()) {
+        core.startGroup("Commit and push changes")
+        await commitAndPushChanges(gitCommiter, dependency, workingDir, token)
+        core.endGroup()
 
-      core.startGroup("Opening pull request")
-      await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token)
-      core.endGroup()
+        core.startGroup("Opening pull request")
+        await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token)
+        core.endGroup()
+      } else {
+        core.info(`No changes in ${dependency} after running Patcher. No further action is necessary.`)
+      }
 
       return
   }

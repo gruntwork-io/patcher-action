@@ -13582,6 +13582,11 @@ function pullRequestTitle(dependency, workingDir) {
     }
     return title;
 }
+async function wasCodeUpdated() {
+    const output = await exec.getExecOutput("git", ["status", "--porcelain"]);
+    // If there are changes, they will appear in the stdout. Otherwise, it returns blank.
+    return !!output.stdout;
+}
 async function commitAndPushChanges(gitCommiter, dependency, workingDir, token) {
     const { owner, repo } = github.context.repo;
     const head = pullRequestBranch(dependency, workingDir);
@@ -13679,12 +13684,17 @@ async function runPatcher(octokit, gitCommiter, binaryPath, command, { updateStr
             core.startGroup("Running 'patcher update'");
             const updateOutput = await exec.getExecOutput(binaryPath, updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
             core.endGroup();
-            core.startGroup("Commit and push changes");
-            await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
-            core.endGroup();
-            core.startGroup("Opening pull request");
-            await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token);
-            core.endGroup();
+            if (await wasCodeUpdated()) {
+                core.startGroup("Commit and push changes");
+                await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
+                core.endGroup();
+                core.startGroup("Opening pull request");
+                // await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token)
+                core.endGroup();
+            }
+            else {
+                core.info(`No changes in ${dependency} after running Patcher. No further action is necessary.`);
+            }
             return;
     }
 }
