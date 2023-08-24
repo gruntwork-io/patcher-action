@@ -28,25 +28,9 @@ jobs:
           repository: ${{ github.repository }}
           event-type: dev_updates_merged
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}", "branch": "${{ github.head_ref }}" }'
-  patcher-report:
-    if: github.event_name == 'repository_dispatch' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    outputs:
-      dependencies: ${{ steps.get-dependencies.outputs.dependencies }}
-    steps:
-      - uses: actions/checkout@v3
-      - uses: gruntwork-io/patcher-action@v1
-        id: get-dependencies
-        with:
-          patcher_command: report
-          working_dir: ${{ env.ENV_FOLDER_NAME }}
 
   update-env:
-    needs: [patcher-report]
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        dependency: ${{ fromJson(needs.patcher-report.outputs.dependencies) }}
     steps:
       - uses: actions/checkout@v3
       - name: Create trigger source message
@@ -57,4 +41,3 @@ jobs:
       - uses: gruntwork-io/patcher-action@v1
         with:
           working_dir: ${{ env.ENV_FOLDER_NAME }}
-          dependency: ${{ matrix.dependency }}

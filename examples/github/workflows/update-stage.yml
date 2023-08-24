@@ -17,26 +17,22 @@ env:
   ENV_FOLDER_NAME: stage
 
 jobs:
-  parse-pr-dependency:
-    if: github.event_name == 'repository_dispatch'
+  trigger-next-env:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'updates-stage')
     runs-on: ubuntu-latest
-    outputs:
-      dependency: ${{ steps.get-branch-from-payload.outputs.dependency }}
     steps:
-      - name: "Parse branch name"
-        id: get-branch-from-payload
-        run: |
-          branch=$(echo "${{ toJson(github.event.client_payload.branch) }}")
-          echo $branch
-          dependency=$(echo $branch | sed 's/patcher-dev-updates-//g')
-          echo $dependency
-          echo -e "dependency=$dependency" >> $GITHUB_OUTPUT
+      - uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: stage_updates_merged
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}", "branch": "${{ github.head_ref }}" }'
+
   update-env:
-    needs: [parse-pr-dependency]
+    if: github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: gruntwork-io/patcher-action@v1
         with:
           working_dir: ${{ env.ENV_FOLDER_NAME }}
-          dependency: ${{ needs.parse-pr-dependency.outputs.dependency }}

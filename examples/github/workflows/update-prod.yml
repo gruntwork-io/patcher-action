@@ -3,7 +3,7 @@ name: Update Prod Dependencies
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [staging_updates_merged]
+    types: [stage_updates_merged]
 
 permissions:
   contents: write
@@ -12,26 +12,11 @@ env:
   ENV_FOLDER_NAME: prod
 
 jobs:
-  parse-pr-dependency:
-    if: github.event_name == 'repository_dispatch'
-    runs-on: ubuntu-latest
-    outputs:
-      dependency: ${{ steps.get-branch-from-payload.outputs.dependency }}
-    steps:
-      - name: "Parse branch name"
-        id: get-branch-from-payload
-        run: |
-          branch=$(echo "${{ toJson(github.event.client_payload.branch) }}")
-          echo $branch
-          dependency=$(echo $branch | sed 's/patcher-stage-updates-//g')
-          echo $dependency
-          echo -e "dependency=$dependency" >> $GITHUB_OUTPUT
   update-env:
-    needs: [parse-pr-dependency]
+    if: github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: gruntwork-io/patcher-action@v1
         with:
           working_dir: ${{ env.ENV_FOLDER_NAME }}
-          dependency: ${{ needs.parse-pr-dependency.outputs.dependency }}
