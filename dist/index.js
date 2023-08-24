@@ -13542,6 +13542,8 @@ const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
 const NON_INTERACTIVE_FLAG = "--non-interactive";
 const NO_COLOR_FLAG = "--no-color";
 const SKIP_CONTAINER_FLAG = "--skip-container-runtime";
+const UPDATE_STRATEGY_FLAG = "--update-strategy";
+const TARGET_FLAG = "--target";
 function osPlatform() {
     const platform = os.platform();
     switch (platform) {
@@ -13552,6 +13554,8 @@ function osPlatform() {
             throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
     }
 }
+// pullRequestBranch formats the branch name. When dependency and workingDir are provided, the branch format will be
+// patcher-dev-updates-gruntwork-io/terraform-aws-vpc/vpc-app`.
 function pullRequestBranch(dependency, workingDir) {
     let branch = "patcher";
     if (workingDir) {
@@ -13563,6 +13567,8 @@ function pullRequestBranch(dependency, workingDir) {
     }
     return branch;
 }
+// pullRequestTitle formats the Pull Request title. When dependency and workingDir are provided, the title will be
+// [Patcher] [dev] Update gruntwork-io/terraform-aws-vpc/vpc-app dependency
 function pullRequestTitle(dependency, workingDir) {
     let title = "[Patcher]";
     if (workingDir) {
@@ -13640,14 +13646,14 @@ function isPatcherCommandValid(command) {
 }
 function updateArgs(updateStrategy, dependency, workingDir) {
     let args = ["update", NO_COLOR_FLAG, NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
-    // If updateStrategy or dependency are not empty, are not empty, assign them with the appropriate flag.
+    // If updateStrategy or dependency are not empty, assign them with the appropriate flag.
     // If they are invalid, Patcher will return an error, which will cause the Action to fail.
     if (updateStrategy !== "") {
-        args = args.concat(`--update-strategy=${updateStrategy}`);
+        args = args.concat(`${UPDATE_STRATEGY_FLAG}=${updateStrategy}`);
     }
     // If a dependency is provided, set the `target` flag so Patcher can limit the update to a single dependency.
     if (dependency !== "") {
-        args = args.concat(`--target=${dependency}`);
+        args = args.concat(`${TARGET_FLAG}=${dependency}`);
     }
     return args.concat([workingDir]);
 }
@@ -13717,6 +13723,7 @@ async function run() {
     const dependency = core.getInput("dependency");
     const workingDir = core.getInput("working_dir");
     const commitAuthor = core.getInput("commit_author");
+    // Always mask the `token` string in the logs.
     core.setSecret(token);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
     const octokit = github.getOctokit(token);
