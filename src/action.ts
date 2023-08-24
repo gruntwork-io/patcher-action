@@ -20,6 +20,8 @@ const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
 const NON_INTERACTIVE_FLAG = "--non-interactive"
 const NO_COLOR_FLAG = "--no-color"
 const SKIP_CONTAINER_FLAG = "--skip-container-runtime"
+const UPDATE_STRATEGY_FLAG = "--update-strategy"
+const TARGET_FLAG = "--target"
 
 // Define types
 
@@ -172,15 +174,15 @@ function isPatcherCommandValid(command: string): boolean {
 function updateArgs(updateStrategy: string, dependency: string, workingDir: string): string[] {
   let args = ["update", NO_COLOR_FLAG, NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
 
-  // If updateStrategy or dependency are not empty, are not empty, assign them with the appropriate flag.
+  // If updateStrategy or dependency are not empty, assign them with the appropriate flag.
   // If they are invalid, Patcher will return an error, which will cause the Action to fail.
   if (updateStrategy !== "") {
-    args = args.concat(`--update-strategy=${updateStrategy}`)
+    args = args.concat(`${UPDATE_STRATEGY_FLAG}=${updateStrategy}`)
   }
 
   // If a dependency is provided, set the `target` flag so Patcher can limit the update to a single dependency.
   if (dependency !== "") {
-    args = args.concat(`--target=${dependency}`)
+    args = args.concat(`${TARGET_FLAG}=${dependency}`)
   }
 
   return args.concat([workingDir]);
