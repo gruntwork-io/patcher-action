@@ -3,10 +3,12 @@ name: Update Prod Dependencies
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [staging_updates_merged]
- 
+    types: [stage_updates_merged]
+
+permissions:
+  contents: write
+
 env:
-  GITHUB_OAUTH_TOKEN: ${{ secrets.PAT }}
   ENV_FOLDER_NAME: prod
 
 jobs:
@@ -15,52 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
-      - name: Download patcher binary
-        uses: dsaltares/fetch-gh-release-asset@master
+      - uses: gruntwork-io/patcher-action@v1
         with:
-          repo: 'gruntwork-io/patcher-cli'
-          file: 'patcher_linux_amd64'
-          target: '/tmp/patcher'
-          token: ${{ secrets.PAT }}
-
-      - name: Run patcher update
-        run: |
-          chmod +x /tmp/patcher
-          cd ${{ env.ENV_FOLDER_NAME }}
-          /tmp/patcher update --non-interactive --update-strategy next-breaking --no-color | tee /tmp/patcher-output.txt
-          
-      - name: format results
-        id: results
-        run: |
-          csplit -k /tmp/patcher-output.txt -f patcher '/^manual_steps_you_must_follow/' || true
-          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-          echo "updates<<$EOF" >> "$GITHUB_OUTPUT"
-          echo "$( tail -n +2 patcher00 )" >> "$GITHUB_OUTPUT"
-          echo "$EOF" >> "$GITHUB_OUTPUT"
-          rm patcher00
-          [[ -f patcher01 ]] || echo '\nNo manual steps are required\n' >> patcher01
-          echo "manual_steps<<$EOF" >> "$GITHUB_OUTPUT"
-          echo "$( tail -n +2 patcher01 )" >> "$GITHUB_OUTPUT"
-          echo "$EOF" >> "$GITHUB_OUTPUT"
-          rm patcher01
-        
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.PAT }}
-          branch: patcher-${{ env.ENV_FOLDER_NAME }}-updates
-          base: master
-          delete-branch: true
-          commit-message: Patcher automated updates
-          title: '[Patcher] Update ${{ env.ENV_FOLDER_NAME }}'
-          body: |
-            Updated `${{ env.ENV_FOLDER_NAME }}` environment
-            
-            ```yaml
-            ${{ steps.results.outputs.updates }}
-            ```
-            ## Manual Steps
-            ```yaml
-            ${{ steps.results.outputs.manual_steps }}
-            ```
+          working_dir: ${{ env.ENV_FOLDER_NAME }}
