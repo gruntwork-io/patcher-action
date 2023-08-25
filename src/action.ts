@@ -1,4 +1,5 @@
 import * as os from "os";
+import * as yaml from "yaml";
 
 import * as github from "@actions/github";
 import * as toolCache from "@actions/tool-cache";
@@ -83,6 +84,92 @@ function pullRequestTitle(dependency: string, workingDir: string): string {
   return title
 }
 
+
+export interface PatcherUpdateSummary {
+  successful_updates:           SuccessfulUpdate[];
+  manual_steps_you_must_follow: ManualStepsYouMustFollow[];
+}
+
+export interface ManualStepsYouMustFollow {
+  instructions_file_path: string;
+}
+
+export interface SuccessfulUpdate {
+  file_path:       string;
+  updated_modules: UpdatedModule[];
+}
+
+export interface UpdatedModule {
+  repo:                  string;
+  module:                string;
+  previous_version:      string;
+  updated_version:       string;
+  next_breaking_version: NextBreakingVersion;
+  patches_applied:       PatchesApplied;
+}
+
+export interface NextBreakingVersion {
+  version:           string;
+  release_notes_url: string;
+}
+
+export interface PatchesApplied {
+  slugs: string[];
+  manual_scripts: string[];
+  count: number;
+}
+
+function pullRequestBodyUpdatedModules(modules: UpdatedModule[]): string {
+  // TODO do not show patches applied if count = 0
+  return modules.map(module => (`  - Previous version: ${module.previous_version}
+  - Updated version: ${module.updated_version} ([Release notes for ${module.next_breaking_version.version}](${module.next_breaking_version.release_notes_url}))
+  - Patches applied: ${module.patches_applied.count}`)).join("\n");
+}
+
+function pullRequestBodySuccessfulUpdates(updatedModules: SuccessfulUpdate[]): string {
+  if (updatedModules) {
+    return updatedModules.map(module => (`- ${module.file_path}
+${pullRequestBodyUpdatedModules(module.updated_modules)}`)).join("\n");
+  }
+
+  return "";
+}
+
+function pullRequestBodyReadmeToUpdate(manualSteps: ManualStepsYouMustFollow[]): string {
+ if (manualSteps) {
+   return  `\n1. Follow the instructions outlined in the \`README-TO-COMPLETE-UPDATE.md\` file and delete it once the update is complete.`
+ }
+
+ return "";
+}
+
+export function pullRequestBody(patcherRawOutput: string, dependency: string): string {
+  const updateSummary = yaml.parse(patcherRawOutput) as PatcherUpdateSummary;
+
+  return `:robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
+
+## Description
+
+Updated the \`${dependency}\` dependency.
+
+### Updated files
+
+${pullRequestBodySuccessfulUpdates(updateSummary.successful_updates)}
+
+<details>
+  <summary>Raw output from \`patcher update\`</summary>
+  \`\`\`yaml
+${patcherRawOutput}
+  \`\`\`
+</details>
+
+## Steps to review
+
+1. Check the proposed changes to the \`terraform\` and/or \`terragrunt\` configuration files.${pullRequestBodyReadmeToUpdate(updateSummary.manual_steps_you_must_follow)}
+1. Validate the changes in the infrastructure by running \`terraform/terragrunt plan\`.
+1. Upon approval, proceed with deploying the infrastructure changes.`
+}
+
 async function wasCodeUpdated() {
   const output = await exec.getExecOutput("git", ["status", "--porcelain"])
   // If there are changes, they will appear in the stdout. Otherwise, it returns blank.
@@ -109,7 +196,6 @@ async function commitAndPushChanges(gitCommiter: GitCommitter, dependency: strin
 
   // Push changes to head branch
   await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`])
-
 }
 
 async function openPullRequest(octokit: GitHub, gitCommiter: GitCommitter, patcherRawOutput: string, dependency: string, workingDir: string, token: string) {
@@ -117,22 +203,14 @@ async function openPullRequest(octokit: GitHub, gitCommiter: GitCommitter, patch
 
   const head = pullRequestBranch(dependency, workingDir)
   const title = pullRequestTitle(dependency, workingDir)
+  const body = pullRequestBody(patcherRawOutput, dependency)
 
-  const body = `
-Updated the \`${dependency}\` dependency using Patcher.
-
-### Update summary
-\`\`\`yaml
-${patcherRawOutput}
-\`\`\`
-`
-
-  const repoDetails = await octokit.rest.repos.get({...repo});
+  const repoDetails = await octokit.rest.repos.get({ ...repo });
   const base = repoDetails.data.default_branch;
   core.debug(`Base branch is ${base}. Opening the PR against it.`)
 
   try {
-    await octokit.rest.pulls.create({...repo, title, head, base, body});
+    await octokit.rest.pulls.create({ ...repo, title, head, base, body });
   } catch (error: any) {
     if (error.message?.includes(`A pull request already exists for`)) {
       core.error(`A pull request for ${head} already exists. The branch was updated.`)
@@ -145,7 +223,7 @@ ${patcherRawOutput}
 async function downloadPatcherBinary(octokit: GitHub, owner: string, repo: string, tag: string, token: string): Promise<string> {
   core.info(`Downloading Patcher version ${tag}`);
 
-  const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({owner, repo, tag})
+  const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag })
 
   const re = new RegExp(`${osPlatform()}.*amd64`)
   const asset = getReleaseResponse.data.assets.find((obj: any) => (re.test(obj.name)));
@@ -209,7 +287,7 @@ async function runPatcher(octokit: GitHub, gitCommiter: GitCommitter, binaryPath
       core.startGroup("Running 'patcher report'")
       const reportOutput = await exec.getExecOutput(binaryPath,
         [command, NON_INTERACTIVE_FLAG, workingDir],
-        {env: getPatcherEnvVars(token)});
+        { env: getPatcherEnvVars(token) });
       core.endGroup()
 
       core.startGroup("Setting 'dependencies' output")
@@ -221,7 +299,7 @@ async function runPatcher(octokit: GitHub, gitCommiter: GitCommitter, binaryPath
       core.startGroup("Running 'patcher update'")
       const updateOutput = await exec.getExecOutput(binaryPath,
         updateArgs(updateStrategy, dependency, workingDir),
-        {env: getPatcherEnvVars(token)});
+        { env: getPatcherEnvVars(token) });
       core.endGroup()
 
       if (await wasCodeUpdated()) {
@@ -305,5 +383,5 @@ export async function run() {
   await exec.exec("chmod", ["+x", patcherPath])
   core.endGroup()
 
-  await runPatcher(octokit, gitCommiter, patcherPath, command, {updateStrategy, dependency, workingDir, token})
+  await runPatcher(octokit, gitCommiter, patcherPath, command, { updateStrategy, dependency, workingDir, token })
 }
