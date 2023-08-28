@@ -13501,37 +13501,17 @@ function wrappy (fn, cb) {
 
 "use strict";
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = exports.pullRequestBody = void 0;
-const os = __importStar(__nccwpck_require__(2037));
-const yaml = __importStar(__nccwpck_require__(4083));
-const github = __importStar(__nccwpck_require__(5438));
-const toolCache = __importStar(__nccwpck_require__(7784));
-const core = __importStar(__nccwpck_require__(2186));
-const exec = __importStar(__nccwpck_require__(1514));
+const os_1 = __importDefault(__nccwpck_require__(2037));
+const yaml_1 = __importDefault(__nccwpck_require__(4083));
+const github_1 = __importDefault(__nccwpck_require__(5438));
+const tool_cache_1 = __importDefault(__nccwpck_require__(7784));
+const core_1 = __importDefault(__nccwpck_require__(2186));
+const exec_1 = __importDefault(__nccwpck_require__(1514));
 // Define constants
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
@@ -13546,7 +13526,7 @@ const SKIP_CONTAINER_FLAG = "--skip-container-runtime";
 const UPDATE_STRATEGY_FLAG = "--update-strategy";
 const TARGET_FLAG = "--target";
 function osPlatform() {
-    const platform = os.platform();
+    const platform = os_1.default.platform();
     switch (platform) {
         case "linux":
         case "darwin":
@@ -13590,20 +13570,20 @@ function pullRequestBodyUpdatedModules(modules) {
   - Patches applied: ${module.patches_applied.count}`)).join("\n");
 }
 function pullRequestBodySuccessfulUpdates(updatedModules) {
-    if (updatedModules) {
+    if (updatedModules && updatedModules.length > 0) {
         return updatedModules.map(module => (`- \`${module.file_path}\`
 ${pullRequestBodyUpdatedModules(module.updated_modules)}`)).join("\n");
     }
     return "";
 }
 function pullRequestBodyReadmeToUpdate(manualSteps) {
-    if (manualSteps) {
+    if (manualSteps && manualSteps.length > 0) {
         return `\n1. Follow the instructions outlined in the \`README-TO-COMPLETE-UPDATE.md\` file and delete it once the update is complete.`;
     }
     return "";
 }
 function pullRequestBody(patcherRawOutput, dependency) {
-    const updateSummary = yaml.parse(patcherRawOutput);
+    const updateSummary = yaml_1.default.parse(patcherRawOutput);
     return `:robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
 
 ## Description
@@ -13631,41 +13611,41 @@ ${patcherRawOutput}
 }
 exports.pullRequestBody = pullRequestBody;
 async function wasCodeUpdated() {
-    const output = await exec.getExecOutput("git", ["status", "--porcelain"]);
+    const output = await exec_1.default.getExecOutput("git", ["status", "--porcelain"]);
     // If there are changes, they will appear in the stdout. Otherwise, it returns blank.
     return !!output.stdout;
 }
 async function commitAndPushChanges(gitCommiter, dependency, workingDir, token) {
-    const { owner, repo } = github.context.repo;
+    const { owner, repo } = github_1.default.context.repo;
     const head = pullRequestBranch(dependency, workingDir);
     // Setup https auth and https remote url
-    await exec.exec("git", ["remote", "set-url", "origin", `https://${token}@github.com/${owner}/${repo}.git`]);
+    await exec_1.default.exec("git", ["remote", "set-url", "origin", `https://${token}@github.com/${owner}/${repo}.git`]);
     // Setup committer name and email
-    await exec.exec("git", ["config", "user.name", gitCommiter.name]);
-    await exec.exec("git", ["config", "user.email", gitCommiter.email]);
+    await exec_1.default.exec("git", ["config", "user.name", gitCommiter.name]);
+    await exec_1.default.exec("git", ["config", "user.email", gitCommiter.email]);
     // Checkout to new branch and commit
-    await exec.exec("git", ["checkout", "-b", head]);
-    await exec.exec("git", ["add", "."]);
+    await exec_1.default.exec("git", ["checkout", "-b", head]);
+    await exec_1.default.exec("git", ["add", "."]);
     const commitMessage = "Update dependencies using Patcher by Gruntwork";
-    await exec.exec("git", ["commit", "-m", commitMessage]);
+    await exec_1.default.exec("git", ["commit", "-m", commitMessage]);
     // Push changes to head branch
-    await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`]);
+    await exec_1.default.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`]);
 }
 async function openPullRequest(octokit, gitCommiter, patcherRawOutput, dependency, workingDir, token) {
     var _a;
-    const { repo } = github.context;
+    const { repo } = github_1.default.context;
     const head = pullRequestBranch(dependency, workingDir);
     const title = pullRequestTitle(dependency, workingDir);
     const body = pullRequestBody(patcherRawOutput, dependency);
     const repoDetails = await octokit.rest.repos.get({ ...repo });
     const base = repoDetails.data.default_branch;
-    core.debug(`Base branch is ${base}. Opening the PR against it.`);
+    core_1.default.debug(`Base branch is ${base}. Opening the PR against it.`);
     try {
         await octokit.rest.pulls.create({ ...repo, title, head, base, body });
     }
     catch (error) {
         if ((_a = error.message) === null || _a === void 0 ? void 0 : _a.includes(`A pull request already exists for`)) {
-            core.error(`A pull request for ${head} already exists. The branch was updated.`);
+            core_1.default.error(`A pull request for ${head} already exists. The branch was updated.`);
         }
         else {
             throw error;
@@ -13673,7 +13653,7 @@ async function openPullRequest(octokit, gitCommiter, patcherRawOutput, dependenc
     }
 }
 async function downloadPatcherBinary(octokit, owner, repo, tag, token) {
-    core.info(`Downloading Patcher version ${tag}`);
+    core_1.default.info(`Downloading Patcher version ${tag}`);
     const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({ owner, repo, tag });
     const re = new RegExp(`${osPlatform()}.*amd64`);
     const asset = getReleaseResponse.data.assets.find((obj) => (re.test(obj.name)));
@@ -13681,10 +13661,10 @@ async function downloadPatcherBinary(octokit, owner, repo, tag, token) {
         throw new Error(`Can not find Patcher release for ${tag} in platform ${re}.`);
     }
     // Use @actions/tool-cache to download Patcher's binary from GitHub
-    const patcherBinaryPath = await toolCache.downloadTool(asset.url, PATCHER_BINARY_PATH, `token ${token}`, {
+    const patcherBinaryPath = await tool_cache_1.default.downloadTool(asset.url, PATCHER_BINARY_PATH, `token ${token}`, {
         accept: "application/octet-stream"
     });
-    core.debug(`Patcher version '${tag}' has been downloaded at ${patcherBinaryPath}`);
+    core_1.default.debug(`Patcher version '${tag}' has been downloaded at ${patcherBinaryPath}`);
     return patcherBinaryPath;
 }
 function isPatcherCommandValid(command) {
@@ -13704,7 +13684,7 @@ function updateArgs(updateStrategy, dependency, workingDir) {
     return args.concat([workingDir]);
 }
 function getPatcherEnvVars(token) {
-    const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
+    const telemetryId = `GHAction-${github_1.default.context.repo.owner}/${github_1.default.context.repo.repo}`;
     return {
         ...process.env,
         "GITHUB_OAUTH_TOKEN": token,
@@ -13714,39 +13694,39 @@ function getPatcherEnvVars(token) {
 async function runPatcher(octokit, gitCommiter, binaryPath, command, { updateStrategy, dependency, workingDir, token }) {
     switch (command) {
         case REPORT_COMMAND:
-            core.startGroup("Running 'patcher report'");
-            const reportOutput = await exec.getExecOutput(binaryPath, [command, NON_INTERACTIVE_FLAG, workingDir], { env: getPatcherEnvVars(token) });
-            core.endGroup();
-            core.startGroup("Setting 'dependencies' output");
-            core.setOutput("dependencies", reportOutput.stdout);
-            core.endGroup();
+            core_1.default.startGroup("Running 'patcher report'");
+            const reportOutput = await exec_1.default.getExecOutput(binaryPath, [command, NON_INTERACTIVE_FLAG, workingDir], { env: getPatcherEnvVars(token) });
+            core_1.default.endGroup();
+            core_1.default.startGroup("Setting 'dependencies' output");
+            core_1.default.setOutput("dependencies", reportOutput.stdout);
+            core_1.default.endGroup();
             return;
         default:
-            core.startGroup("Running 'patcher update'");
-            const updateOutput = await exec.getExecOutput(binaryPath, updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
-            core.endGroup();
+            core_1.default.startGroup("Running 'patcher update'");
+            const updateOutput = await exec_1.default.getExecOutput(binaryPath, updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
+            core_1.default.endGroup();
             if (await wasCodeUpdated()) {
-                core.startGroup("Commit and push changes");
+                core_1.default.startGroup("Commit and push changes");
                 await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
-                core.endGroup();
-                core.startGroup("Opening pull request");
+                core_1.default.endGroup();
+                core_1.default.startGroup("Opening pull request");
                 await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir, token);
-                core.endGroup();
+                core_1.default.endGroup();
             }
             else {
-                core.info(`No changes in ${dependency} after running Patcher. No further action is necessary.`);
+                core_1.default.info(`No changes in ${dependency} after running Patcher. No further action is necessary.`);
             }
             return;
     }
 }
 function parseCommitAuthor(commitAuthor) {
     const pattern = new RegExp(/^([^<]+)\s+<([^>]+)>$/);
-    core.debug(`pattern test is  ${pattern.test(commitAuthor)}`);
+    core_1.default.debug(`pattern test is  ${pattern.test(commitAuthor)}`);
     const match = commitAuthor.match(pattern);
     if (match) {
         const name = match[1];
         const email = match[2];
-        core.debug(`Committer data is ${commitAuthor} -> '${name}' '${email}'`);
+        core_1.default.debug(`Committer data is ${commitAuthor} -> '${name}' '${email}'`);
         return { name, email };
     }
     throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
@@ -13768,30 +13748,30 @@ async function validateAccessToPatcherCli(octokit) {
     }
 }
 async function run() {
-    const token = core.getInput("github_token");
-    const command = core.getInput("patcher_command");
-    const updateStrategy = core.getInput("update_strategy");
-    const dependency = core.getInput("dependency");
-    const workingDir = core.getInput("working_dir");
-    const commitAuthor = core.getInput("commit_author");
+    const token = core_1.default.getInput("github_token");
+    const command = core_1.default.getInput("patcher_command");
+    const updateStrategy = core_1.default.getInput("update_strategy");
+    const dependency = core_1.default.getInput("dependency");
+    const workingDir = core_1.default.getInput("working_dir");
+    const commitAuthor = core_1.default.getInput("commit_author");
     // Always mask the `token` string in the logs.
-    core.setSecret(token);
+    core_1.default.setSecret(token);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
-    const octokit = github.getOctokit(token);
+    const octokit = github_1.default.getOctokit(token);
     await validateAccessToPatcherCli(octokit);
     // Validate if the 'patcher_command' provided is valid.
     if (!isPatcherCommandValid(command)) {
         throw new Error(`Invalid Patcher command ${command}`);
     }
-    core.info(`Patcher's ${command}' command will be executed.`);
+    core_1.default.info(`Patcher's ${command}' command will be executed.`);
     // Validate if 'commit_author' has a valid format.
     const gitCommiter = parseCommitAuthor(commitAuthor);
-    core.startGroup("Downloading Patcher");
+    core_1.default.startGroup("Downloading Patcher");
     const patcherPath = await downloadPatcherBinary(octokit, GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, PATCHER_VERSION, token);
-    core.endGroup();
-    core.startGroup("Granting permissions to Patcher's binary");
-    await exec.exec("chmod", ["+x", patcherPath]);
-    core.endGroup();
+    core_1.default.endGroup();
+    core_1.default.startGroup("Granting permissions to Patcher's binary");
+    await exec_1.default.exec("chmod", ["+x", patcherPath]);
+    core_1.default.endGroup();
     await runPatcher(octokit, gitCommiter, patcherPath, command, { updateStrategy, dependency, workingDir, token });
 }
 exports.run = run;
@@ -13804,38 +13784,18 @@ exports.run = run;
 
 "use strict";
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const core = __importStar(__nccwpck_require__(2186));
+const core_1 = __importDefault(__nccwpck_require__(2186));
 const action_1 = __nccwpck_require__(7672);
 (async () => {
     try {
         await (0, action_1.run)();
     }
     catch (e) {
-        core.setFailed(`Action failed with "${e}"`);
+        core_1.default.setFailed(`Action failed with "${e}"`);
     }
 })();
 
