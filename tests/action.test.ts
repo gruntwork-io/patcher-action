@@ -17,7 +17,10 @@ describe("pullRequestBody", () => {
            count: 0
 manual_steps_you_must_follow:
    - instructions_file_path: dev/eu-central-1/networking/vpc/README-TO-COMPLETE-UPDATE.md`
-    const expectedBody = `:robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
+
+    const result = pullRequestBody(patcherRawOutput, "gruntwork-io/terraform-aws-service-catalog/networking/vpc");
+    expect(result).toMatchInlineSnapshot(`
+":robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
 
 ## Description
 
@@ -57,9 +60,8 @@ manual_steps_you_must_follow:
 1. Check the proposed changes to the \`terraform\` and/or \`terragrunt\` configuration files.
 1. Follow the instructions outlined in the \`README-TO-COMPLETE-UPDATE.md\` file and delete it once the update is complete.
 1. Validate the changes in the infrastructure by running \`terraform/terragrunt plan\`.
-1. Upon approval, proceed with deploying the infrastructure changes.`;
-    const result = pullRequestBody(patcherRawOutput, "gruntwork-io/terraform-aws-service-catalog/networking/vpc");
-    expect(result).toBe(expectedBody);
+1. Upon approval, proceed with deploying the infrastructure changes."
+`);
   });
   test("parses patcher's output when updating two files", () => {
     const patcherRawOutput = `successful_updates:
@@ -85,7 +87,9 @@ manual_steps_you_must_follow:
           release_notes_url: https://github.com/gruntwork-io/terraform-aws-service-catalog/releases/tag/v0.103.0
         patches_applied:
           count: 0`;
-    const expectedBody = `:robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
+    const result = pullRequestBody(patcherRawOutput, "gruntwork-io/terraform-aws-service-catalog/services/k8s-service");
+    expect(result).toMatchInlineSnapshot(`
+":robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
 
 ## Description
 
@@ -137,8 +141,7 @@ successful_updates:
 
 1. Check the proposed changes to the \`terraform\` and/or \`terragrunt\` configuration files.
 1. Validate the changes in the infrastructure by running \`terraform/terragrunt plan\`.
-1. Upon approval, proceed with deploying the infrastructure changes.`;
-    const result = pullRequestBody(patcherRawOutput, "gruntwork-io/terraform-aws-service-catalog/services/k8s-service");
-    expect(result).toBe(expectedBody);
+1. Upon approval, proceed with deploying the infrastructure changes."
+`);
   });
 });

@@ -136,7 +136,7 @@ ${pullRequestBodyUpdatedModules(module.updated_modules)}`)).join("\n");
 }
 
 function pullRequestBodyReadmeToUpdate(manualSteps: ManualStepsYouMustFollow[]): string {
- if (manualSteps) {
+ if (manualSteps && manualSteps.length > 0) {
    return  `\n1. Follow the instructions outlined in the \`README-TO-COMPLETE-UPDATE.md\` file and delete it once the update is complete.`
  }
 
