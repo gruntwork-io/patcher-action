@@ -1,10 +1,10 @@
-import * as os from "os";
-import * as yaml from "yaml";
+import os from "os";
+import yaml from "yaml";
 
-import * as github from "@actions/github";
-import * as toolCache from "@actions/tool-cache";
-import * as core from "@actions/core";
-import * as exec from "@actions/exec";
+import github from "@actions/github";
+import toolCache from "@actions/tool-cache";
+import core from "@actions/core";
+import exec from "@actions/exec";
 import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/types";
 
 // Define constants
@@ -127,7 +127,7 @@ function pullRequestBodyUpdatedModules(modules: UpdatedModule[]): string {
 }
 
 function pullRequestBodySuccessfulUpdates(updatedModules: SuccessfulUpdate[]): string {
-  if (updatedModules) {
+  if (updatedModules && updatedModules.length > 0) {
     return updatedModules.map(module => (`- \`${module.file_path}\`
 ${pullRequestBodyUpdatedModules(module.updated_modules)}`)).join("\n");
   }
