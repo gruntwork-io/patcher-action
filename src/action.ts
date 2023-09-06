@@ -369,6 +369,8 @@ export async function run() {
   const workingDir = core.getInput("working_dir")
   const commitAuthor = core.getInput("commit_author")
 
+  console.log("Hi!")
+
   // Always mask the `token` string in the logs.
   core.setSecret(token)
 
