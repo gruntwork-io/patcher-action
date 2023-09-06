@@ -119,11 +119,19 @@ export interface PatchesApplied {
   count: number;
 }
 
+function pullRequestReleaseNotesBreakingVersion(nextBreakingVersion: NextBreakingVersion): string {
+  if (!!nextBreakingVersion) {
+    return `([Release notes for ${nextBreakingVersion.version}](${nextBreakingVersion.release_notes_url}))`
+  }
+
+  return "";
+}
+
 function pullRequestBodyUpdatedModules(modules: UpdatedModule[]): string {
-  // TODO do not show patches applied if count = 0
   return modules.map(module => (`  - Previous version: \`${module.previous_version}\`
-  - Updated version: \`${module.updated_version}\` ([Release notes for ${module.next_breaking_version.version}](${module.next_breaking_version.release_notes_url}))
-  - Patches applied: ${module.patches_applied.count}`)).join("\n");
+  - Updated version: \`${module.updated_version}\` ${pullRequestReleaseNotesBreakingVersion(module.next_breaking_version)}
+  - Patches applied: ${module.patches_applied.count}`
+)).join("\n");
 }
 
 function pullRequestBodySuccessfulUpdates(updatedModules: SuccessfulUpdate[]): string {
