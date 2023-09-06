@@ -144,4 +144,53 @@ successful_updates:
 1. Upon approval, proceed with deploying the infrastructure changes."
 `);
   });
+  test("parses patcher's output when updating two files", () => {
+    const patcherRawOutput = `  successful_updates:
+      - file_path: dev/us-east-1/_regional/service-quotas/terragrunt.hcl
+        updated_modules:
+          - repo: terraform-aws-utilities
+            module: request-quota-increase
+            previous_version: v0.9.2
+            updated_version: v0.9.4
+            patches_applied:
+              count: 0`;
+    const result = pullRequestBody(patcherRawOutput, "gruntwork-io/terraform-aws-utilities/request-quota-increase");
+    expect(result).toMatchInlineSnapshot(`
+":robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
+
+## Description
+
+Updated the \`gruntwork-io/terraform-aws-utilities/request-quota-increase\` dependency.
+
+### Updated files
+
+- \`dev/us-east-1/_regional/service-quotas/terragrunt.hcl\`
+  - Previous version: \`v0.9.2\`
+  - Updated version: \`v0.9.4\` 
+  - Patches applied: 0
+
+<details>
+  <summary>Raw output from \`patcher update\`</summary>
+
+  \`\`\`yaml
+  successful_updates:
+      - file_path: dev/us-east-1/_regional/service-quotas/terragrunt.hcl
+        updated_modules:
+          - repo: terraform-aws-utilities
+            module: request-quota-increase
+            previous_version: v0.9.2
+            updated_version: v0.9.4
+            patches_applied:
+              count: 0
+  \`\`\`
+
+</details>
+
+## Steps to review
+
+1. Check the proposed changes to the \`terraform\` and/or \`terragrunt\` configuration files.
+1. Validate the changes in the infrastructure by running \`terraform/terragrunt plan\`.
+1. Upon approval, proceed with deploying the infrastructure changes."
+`);
+  });
 });

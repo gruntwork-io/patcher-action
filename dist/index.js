@@ -474,7 +474,7 @@ exports.prepareKeyValueMessage = exports.issueFileCommand = void 0;
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const fs = __importStar(__nccwpck_require__(7147));
 const os = __importStar(__nccwpck_require__(2037));
-const uuid_1 = __nccwpck_require__(1866);
+const uuid_1 = __nccwpck_require__(8974);
 const utils_1 = __nccwpck_require__(5278);
 function issueFileCommand(command, message) {
     const filePath = process.env[`GITHUB_${command}`];
@@ -994,7 +994,7 @@ exports.toCommandProperties = toCommandProperties;
 
 /***/ }),
 
-/***/ 1866:
+/***/ 8974:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -13583,10 +13583,15 @@ function pullRequestTitle(dependency, workingDir) {
     }
     return title;
 }
+function pullRequestReleaseNotesBreakingVersion(nextBreakingVersion) {
+    if (!!nextBreakingVersion) {
+        return `([Release notes for ${nextBreakingVersion.version}](${nextBreakingVersion.release_notes_url}))`;
+    }
+    return "";
+}
 function pullRequestBodyUpdatedModules(modules) {
-    // TODO do not show patches applied if count = 0
     return modules.map(module => (`  - Previous version: \`${module.previous_version}\`
-  - Updated version: \`${module.updated_version}\` ([Release notes for ${module.next_breaking_version.version}](${module.next_breaking_version.release_notes_url}))
+  - Updated version: \`${module.updated_version}\` ${pullRequestReleaseNotesBreakingVersion(module.next_breaking_version)}
   - Patches applied: ${module.patches_applied.count}`)).join("\n");
 }
 function pullRequestBodySuccessfulUpdates(updatedModules) {
@@ -13795,6 +13800,29 @@ async function run() {
     await runPatcher(octokit, gitCommiter, patcherPath, command, { updateStrategy, dependency, workingDir, token });
 }
 exports.run = run;
+
+
+/***/ }),
+
+/***/ 6144:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const core_1 = __importDefault(__nccwpck_require__(2186));
+const action_1 = __nccwpck_require__(7672);
+(async () => {
+    try {
+        await (0, action_1.run)();
+    }
+    catch (e) {
+        core_1.default.setFailed(`Action failed with "${e}"`);
+    }
+})();
 
 
 /***/ }),
@@ -20246,7 +20274,7 @@ var int = __nccwpck_require__(3019);
 var schema = __nccwpck_require__(27);
 var schema$1 = __nccwpck_require__(4545);
 var binary = __nccwpck_require__(5724);
-var omap = __nccwpck_require__(8974);
+var omap = __nccwpck_require__(644);
 var pairs = __nccwpck_require__(9841);
 var schema$2 = __nccwpck_require__(5389);
 var set = __nccwpck_require__(7847);
@@ -20579,7 +20607,7 @@ exports.intOct = intOct;
 
 /***/ }),
 
-/***/ 8974:
+/***/ 644:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -20767,7 +20795,7 @@ var binary = __nccwpck_require__(5724);
 var bool = __nccwpck_require__(2631);
 var float = __nccwpck_require__(8035);
 var int = __nccwpck_require__(9503);
-var omap = __nccwpck_require__(8974);
+var omap = __nccwpck_require__(644);
 var pairs = __nccwpck_require__(9841);
 var set = __nccwpck_require__(7847);
 var timestamp = __nccwpck_require__(1156);
@@ -22410,24 +22438,12 @@ module.exports = JSON.parse('[[[0,44],"disallowed_STD3_valid"],[[45,46],"valid"]
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
 /******/ 	
 /************************************************************************/
-var __webpack_exports__ = {};
-// This entry need to be wrapped in an IIFE because it need to be in strict mode.
-(() => {
-"use strict";
-var exports = __webpack_exports__;
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const action_1 = __nccwpck_require__(7672);
-(async () => {
-    // try {
-    await (0, action_1.run)();
-    // } catch (e) {
-    // core.setFailed(`Action failed with "${e}"`);
-    // }
-})();
-
-})();
-
-module.exports = __webpack_exports__;
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module is referenced by other modules so it can't be inlined
+/******/ 	var __webpack_exports__ = __nccwpck_require__(6144);
+/******/ 	module.exports = __webpack_exports__;
+/******/ 	
 /******/ })()
 ;
