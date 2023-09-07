@@ -1,5 +1,5 @@
-import { pullRequestBody } from '../src/action';
-import {describe, expect, test} from '@jest/globals';
+import { pullRequestBody } from "../src/action";
+import { describe, expect, test } from "@jest/globals";
 
 describe("pullRequestBody", () => {
   test("parses patcher's output when updating a single file", () => {
@@ -16,9 +16,12 @@ describe("pullRequestBody", () => {
          patches_applied:
            count: 0
 manual_steps_you_must_follow:
-   - instructions_file_path: dev/eu-central-1/networking/vpc/README-TO-COMPLETE-UPDATE.md`
+   - instructions_file_path: dev/eu-central-1/networking/vpc/README-TO-COMPLETE-UPDATE.md`;
 
-    const result = pullRequestBody(patcherRawOutput, "gruntwork-io/terraform-aws-service-catalog/networking/vpc");
+    const result = pullRequestBody(
+      patcherRawOutput,
+      "gruntwork-io/terraform-aws-service-catalog/networking/vpc",
+    );
     expect(result).toMatchInlineSnapshot(`
 ":robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
 
@@ -87,7 +90,10 @@ manual_steps_you_must_follow:
           release_notes_url: https://github.com/gruntwork-io/terraform-aws-service-catalog/releases/tag/v0.103.0
         patches_applied:
           count: 0`;
-    const result = pullRequestBody(patcherRawOutput, "gruntwork-io/terraform-aws-service-catalog/services/k8s-service");
+    const result = pullRequestBody(
+      patcherRawOutput,
+      "gruntwork-io/terraform-aws-service-catalog/services/k8s-service",
+    );
     expect(result).toMatchInlineSnapshot(`
 ":robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
 
@@ -154,7 +160,10 @@ successful_updates:
             updated_version: v0.9.4
             patches_applied:
               count: 0`;
-    const result = pullRequestBody(patcherRawOutput, "gruntwork-io/terraform-aws-utilities/request-quota-increase");
+    const result = pullRequestBody(
+      patcherRawOutput,
+      "gruntwork-io/terraform-aws-utilities/request-quota-increase",
+    );
     expect(result).toMatchInlineSnapshot(`
 ":robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
 
