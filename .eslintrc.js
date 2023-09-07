@@ -5,6 +5,6 @@ module.exports = {
     root: true,
     ignorePatterns: ["dist/index.js"],
     rules: {
-        "@typescript-eslint/no-explicit-any": "warn",
+        "@typescript-eslint/no-explicit-any": "off",
     }
 };
