@@ -13754,8 +13754,16 @@ async function downloadGitHubBinary(octokit, owner, repo, tag, token) {
 async function downloadAndSetupTooling(octokit, token) {
     // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
     const tools = [
-        { org: GRUNTWORK_GITHUB_ORG, repo: PATCHER_GITHUB_REPO, version: PATCHER_VERSION },
-        { org: GRUNTWORK_GITHUB_ORG, repo: TERRAPATCH_GITHUB_REPO, version: TERRAPATCH_VERSION },
+        {
+            org: GRUNTWORK_GITHUB_ORG,
+            repo: PATCHER_GITHUB_REPO,
+            version: PATCHER_VERSION,
+        },
+        {
+            org: GRUNTWORK_GITHUB_ORG,
+            repo: TERRAPATCH_GITHUB_REPO,
+            version: TERRAPATCH_VERSION,
+        },
         { org: HCLEDIT_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
         { org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION },
     ];
@@ -13808,7 +13816,14 @@ async function runPatcher(octokit, gitCommiter, command, { updateStrategy, depen
             core.startGroup("Running 'patcher update'");
             const updateOutput = await exec.getExecOutput("patcher", updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
             core.endGroup();
-            if (false) {}
+            if (await wasCodeUpdated()) {
+                core.startGroup("Commit and push changes");
+                await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
+                core.endGroup();
+                core.startGroup("Opening pull request");
+                await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir);
+                core.endGroup();
+            }
             else {
                 core.info(`No changes in ${dependency} after running Patcher. No further action is necessary.`);
             }

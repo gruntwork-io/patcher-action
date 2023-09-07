@@ -17,9 +17,9 @@ const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
 const TERRAPATCH_VERSION = "v0.1.3";
 
 const HCLEDIT_ORG = "minamijoyo";
-const TFUPDATE_GITHUB_REPO = "tfupdate"
+const TFUPDATE_GITHUB_REPO = "tfupdate";
 const TFUPDATE_VERSION = "v0.6.5";
-const HCLEDIT_GITHUB_REPO = "hcledit"
+const HCLEDIT_GITHUB_REPO = "hcledit";
 const HCLEDIT_VERSION = "v0.2.5";
 
 const REPORT_COMMAND = "report";
@@ -84,13 +84,6 @@ interface DownloadedBinary {
   folder: string;
   name: string;
 }
-
-interface Hi123 {
-  repo: string;
-  org: string;
-  version: string;
-}
-
 
 function osPlatform() {
   const platform = os.platform();
@@ -296,12 +289,12 @@ async function openPullRequest(
 
 function repoToBinaryMap(repo: string): string {
   switch (repo) {
-  case "patcher-cli":
-    return "patcher";
-  case "terrapatch-cli":
-    return "terrapatch";
-  default:
-    return repo;
+    case "patcher-cli":
+      return "patcher";
+    case "terrapatch-cli":
+      return "terrapatch";
+    default:
+      return repo;
   }
 }
 
@@ -323,7 +316,7 @@ async function downloadGitHubBinary(
   const binaryName = repoToBinaryMap(repo);
 
   // Before downloading, check the cache.
-  const pathInCache = toolCache.find(repo, tag)
+  const pathInCache = toolCache.find(repo, tag);
   if (pathInCache) {
     core.info(`Found ${owner}/${repo} version ${tag} in cache!`);
 
@@ -365,34 +358,51 @@ async function downloadGitHubBinary(
   );
 
   if (path.extname(asset.name) === ".gz") {
-    await exec.exec(`mkdir ${binaryName}`)
-    await exec.exec(`tar -C ${binaryName} -xzvf ${downloadedPath}`)
+    await exec.exec(`mkdir ${binaryName}`);
+    await exec.exec(`tar -C ${binaryName} -xzvf ${downloadedPath}`);
 
-    const extractedPath = path.join(binaryName, binaryName)
+    const extractedPath = path.join(binaryName, binaryName);
 
-    const cachedPath = await toolCache.cacheFile(extractedPath, binaryName, repo, tag);
+    const cachedPath = await toolCache.cacheFile(
+      extractedPath,
+      binaryName,
+      repo,
+      tag,
+    );
     core.debug(`Cached in ${cachedPath}`);
 
     return { folder: cachedPath, name: binaryName };
   }
 
-  const cachedPath = await toolCache.cacheFile(downloadedPath, binaryName, repo, tag);
+  const cachedPath = await toolCache.cacheFile(
+    downloadedPath,
+    binaryName,
+    repo,
+    tag,
+  );
   core.debug(`Cached in ${cachedPath}`);
 
   return { folder: cachedPath, name: binaryName };
-
 }
 
 async function downloadAndSetupTooling(octokit: GitHub, token: string) {
   // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
   const tools = [
-    {org: GRUNTWORK_GITHUB_ORG, repo: PATCHER_GITHUB_REPO, version: PATCHER_VERSION},
-    {org: GRUNTWORK_GITHUB_ORG, repo: TERRAPATCH_GITHUB_REPO, version: TERRAPATCH_VERSION},
-    {org: HCLEDIT_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION},
-    {org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION},
+    {
+      org: GRUNTWORK_GITHUB_ORG,
+      repo: PATCHER_GITHUB_REPO,
+      version: PATCHER_VERSION,
+    },
+    {
+      org: GRUNTWORK_GITHUB_ORG,
+      repo: TERRAPATCH_GITHUB_REPO,
+      version: TERRAPATCH_VERSION,
+    },
+    { org: HCLEDIT_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
+    { org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION },
   ];
 
- for await (const {org, repo, version} of tools) {
+  for await (const { org, repo, version } of tools) {
     const binary = await downloadGitHubBinary(
       octokit,
       org,
@@ -475,7 +485,7 @@ async function runPatcher(
       );
       core.endGroup();
 
-      if (false) {
+      if (await wasCodeUpdated()) {
         core.startGroup("Commit and push changes");
         await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
         core.endGroup();
