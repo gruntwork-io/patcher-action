@@ -13727,11 +13727,10 @@ async function downloadGitHubBinary(octokit, owner, repo, tag, token) {
         repo,
         tag,
     });
-    // TODO improve this.
     const re = new RegExp(`${osPlatform()}.*amd64`);
     const asset = getReleaseResponse.data.assets.find((obj) => re.test(obj.name));
     if (!asset) {
-        throw new Error(`Can not find Patcher release for ${tag} in platform ${re}.`);
+        throw new Error(`Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`);
     }
     // Use @actions/tool-cache to download the binary from GitHub
     const downloadedPath = await toolCache.downloadTool(asset.url, 
@@ -13740,6 +13739,14 @@ async function downloadGitHubBinary(octokit, owner, repo, tag, token) {
         accept: "application/octet-stream",
     });
     core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
+    if (path.extname(asset.name) === ".gz") {
+        await exec.exec(`mkdir ${binaryName}`);
+        await exec.exec(`tar -C ${binaryName} -xzvf ${downloadedPath}`);
+        const extractedPath = path.join(binaryName, binaryName);
+        const cachedPath = await toolCache.cacheFile(extractedPath, binaryName, repo, tag);
+        core.debug(`Cached in ${cachedPath}`);
+        return { folder: cachedPath, name: binaryName };
+    }
     const cachedPath = await toolCache.cacheFile(downloadedPath, binaryName, repo, tag);
     core.debug(`Cached in ${cachedPath}`);
     return { folder: cachedPath, name: binaryName };
