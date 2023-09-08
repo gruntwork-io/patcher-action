@@ -13596,11 +13596,17 @@ function pullRequestReleaseNotesBreakingVersion(nextBreakingVersion) {
     }
     return "";
 }
+function pullRequestPatchesApplied(patchesApplied) {
+    if (patchesApplied) {
+        return `- Patches applied: ${patchesApplied.count}`;
+    }
+    return "";
+}
 function pullRequestBodyUpdatedModules(modules) {
     return modules
         .map((module) => `  - Previous version: \`${module.previous_version}\`
   - Updated version: \`${module.updated_version}\` ${pullRequestReleaseNotesBreakingVersion(module.next_breaking_version)}
-  - Patches applied: ${module.patches_applied.count}`)
+  ${pullRequestPatchesApplied(module.patches_applied)}`)
         .join("\n");
 }
 function pullRequestBodySuccessfulUpdates(updatedModules) {
