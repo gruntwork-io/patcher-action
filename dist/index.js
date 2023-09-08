@@ -13746,9 +13746,9 @@ async function downloadGitHubBinary(octokit, owner, repo, tag, token) {
     });
     core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
     if (path.extname(asset.name) === ".gz") {
-        await exec.exec(`mkdir ${binaryName}`);
-        await exec.exec(`tar -C ${binaryName} -xzvf ${downloadedPath}`);
-        const extractedPath = path.join(binaryName, binaryName);
+        await exec.exec(`mkdir /tmp/${binaryName}`);
+        await exec.exec(`tar -C /tmp/${binaryName} -xzvf ${downloadedPath}`);
+        const extractedPath = path.join("/tmp", binaryName, binaryName);
         const cachedPath = await toolCache.cacheFile(extractedPath, binaryName, repo, tag);
         core.debug(`Cached in ${cachedPath}`);
         return { folder: cachedPath, name: binaryName };
