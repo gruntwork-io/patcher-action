@@ -143,6 +143,14 @@ function pullRequestReleaseNotesBreakingVersion(
   return "";
 }
 
+function pullRequestPatchesApplied(patchesApplied: PatchesApplied): string {
+  if (patchesApplied) {
+    return `- Patches applied: ${patchesApplied.count}`;
+  }
+
+  return "";
+}
+
 function pullRequestBodyUpdatedModules(modules: UpdatedModule[]): string {
   return modules
     .map(
@@ -150,7 +158,7 @@ function pullRequestBodyUpdatedModules(modules: UpdatedModule[]): string {
   - Updated version: \`${
     module.updated_version
   }\` ${pullRequestReleaseNotesBreakingVersion(module.next_breaking_version)}
-  - Patches applied: ${module.patches_applied.count}`,
+  ${pullRequestPatchesApplied(module.patches_applied)}`,
     )
     .join("\n");
 }
@@ -358,10 +366,10 @@ async function downloadGitHubBinary(
   );
 
   if (path.extname(asset.name) === ".gz") {
-    await exec.exec(`mkdir ${binaryName}`);
-    await exec.exec(`tar -C ${binaryName} -xzvf ${downloadedPath}`);
+    await exec.exec(`mkdir /tmp/${binaryName}`);
+    await exec.exec(`tar -C /tmp/${binaryName} -xzvf ${downloadedPath}`);
 
-    const extractedPath = path.join(binaryName, binaryName);
+    const extractedPath = path.join("/tmp", binaryName, binaryName);
 
     const cachedPath = await toolCache.cacheFile(
       extractedPath,
