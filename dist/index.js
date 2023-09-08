@@ -13528,6 +13528,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = exports.pullRequestBody = void 0;
 const os = __importStar(__nccwpck_require__(2037));
 const yaml = __importStar(__nccwpck_require__(4083));
+const path = __importStar(__nccwpck_require__(1017));
 const github = __importStar(__nccwpck_require__(5438));
 const toolCache = __importStar(__nccwpck_require__(7784));
 const core = __importStar(__nccwpck_require__(2186));
@@ -13536,7 +13537,13 @@ const exec = __importStar(__nccwpck_require__(1514));
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
 const PATCHER_VERSION = "v0.4.3";
-const PATCHER_BINARY_PATH = "/tmp/patcher";
+const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
+const TERRAPATCH_VERSION = "v0.1.3";
+const HCLEDIT_ORG = "minamijoyo";
+const TFUPDATE_GITHUB_REPO = "tfupdate";
+const TFUPDATE_VERSION = "v0.6.5";
+const HCLEDIT_GITHUB_REPO = "hcledit";
+const HCLEDIT_VERSION = "v0.2.5";
 const REPORT_COMMAND = "report";
 const UPDATE_COMMAND = "update";
 const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
@@ -13691,8 +13698,30 @@ async function openPullRequest(octokit, gitCommiter, patcherRawOutput, dependenc
         }
     }
 }
-async function downloadPatcherBinary(octokit, owner, repo, tag, token) {
-    core.info(`Downloading Patcher version ${tag}`);
+function repoToBinaryMap(repo) {
+    switch (repo) {
+        case "patcher-cli":
+            return "patcher";
+        case "terrapatch-cli":
+            return "terrapatch";
+        default:
+            return repo;
+    }
+}
+async function setupBinaryInEnv(binary) {
+    const binaryPath = path.join(binary.folder, binary.name);
+    core.addPath(binary.folder);
+    await exec.exec("chmod", ["+x", binaryPath]);
+}
+async function downloadGitHubBinary(octokit, owner, repo, tag, token) {
+    const binaryName = repoToBinaryMap(repo);
+    // Before downloading, check the cache.
+    const pathInCache = toolCache.find(repo, tag);
+    if (pathInCache) {
+        core.info(`Found ${owner}/${repo} version ${tag} in cache!`);
+        return { folder: pathInCache, name: binaryName };
+    }
+    core.info(`Downloading ${owner}/${repo} version ${tag}`);
     const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({
         owner,
         repo,
@@ -13701,14 +13730,47 @@ async function downloadPatcherBinary(octokit, owner, repo, tag, token) {
     const re = new RegExp(`${osPlatform()}.*amd64`);
     const asset = getReleaseResponse.data.assets.find((obj) => re.test(obj.name));
     if (!asset) {
-        throw new Error(`Can not find Patcher release for ${tag} in platform ${re}.`);
+        throw new Error(`Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`);
     }
-    // Use @actions/tool-cache to download Patcher's binary from GitHub
-    const patcherBinaryPath = await toolCache.downloadTool(asset.url, PATCHER_BINARY_PATH, `token ${token}`, {
+    // Use @actions/tool-cache to download the binary from GitHub
+    const downloadedPath = await toolCache.downloadTool(asset.url, 
+    // Don't set a destination path. It will default to a temporary one.
+    undefined, `token ${token}`, {
         accept: "application/octet-stream",
     });
-    core.debug(`Patcher version '${tag}' has been downloaded at ${patcherBinaryPath}`);
-    return patcherBinaryPath;
+    core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
+    if (path.extname(asset.name) === ".gz") {
+        await exec.exec(`mkdir ${binaryName}`);
+        await exec.exec(`tar -C ${binaryName} -xzvf ${downloadedPath}`);
+        const extractedPath = path.join(binaryName, binaryName);
+        const cachedPath = await toolCache.cacheFile(extractedPath, binaryName, repo, tag);
+        core.debug(`Cached in ${cachedPath}`);
+        return { folder: cachedPath, name: binaryName };
+    }
+    const cachedPath = await toolCache.cacheFile(downloadedPath, binaryName, repo, tag);
+    core.debug(`Cached in ${cachedPath}`);
+    return { folder: cachedPath, name: binaryName };
+}
+async function downloadAndSetupTooling(octokit, token) {
+    // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
+    const tools = [
+        {
+            org: GRUNTWORK_GITHUB_ORG,
+            repo: PATCHER_GITHUB_REPO,
+            version: PATCHER_VERSION,
+        },
+        {
+            org: GRUNTWORK_GITHUB_ORG,
+            repo: TERRAPATCH_GITHUB_REPO,
+            version: TERRAPATCH_VERSION,
+        },
+        { org: HCLEDIT_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
+        { org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION },
+    ];
+    for await (const { org, repo, version } of tools) {
+        const binary = await downloadGitHubBinary(octokit, org, repo, version, token);
+        await setupBinaryInEnv(binary);
+    }
 }
 function isPatcherCommandValid(command) {
     return VALID_COMMANDS.includes(command);
@@ -13739,11 +13801,11 @@ function getPatcherEnvVars(token) {
         PATCHER_TELEMETRY_ID: telemetryId,
     };
 }
-async function runPatcher(octokit, gitCommiter, binaryPath, command, { updateStrategy, dependency, workingDir, token }) {
+async function runPatcher(octokit, gitCommiter, command, { updateStrategy, dependency, workingDir, token }) {
     switch (command) {
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
-            const reportOutput = await exec.getExecOutput(binaryPath, [command, NON_INTERACTIVE_FLAG, workingDir], { env: getPatcherEnvVars(token) });
+            const reportOutput = await exec.getExecOutput("patcher", [command, NON_INTERACTIVE_FLAG, workingDir], { env: getPatcherEnvVars(token) });
             core.endGroup();
             core.startGroup("Setting 'dependencies' output");
             core.setOutput("dependencies", reportOutput.stdout);
@@ -13752,7 +13814,7 @@ async function runPatcher(octokit, gitCommiter, binaryPath, command, { updateStr
         }
         default: {
             core.startGroup("Running 'patcher update'");
-            const updateOutput = await exec.getExecOutput(binaryPath, updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
+            const updateOutput = await exec.getExecOutput("patcher", updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
             core.endGroup();
             if (await wasCodeUpdated()) {
                 core.startGroup("Commit and push changes");
@@ -13816,13 +13878,10 @@ async function run() {
     core.info(`Patcher's ${command}' command will be executed.`);
     // Validate if 'commit_author' has a valid format.
     const gitCommiter = parseCommitAuthor(commitAuthor);
-    core.startGroup("Downloading Patcher");
-    const patcherPath = await downloadPatcherBinary(octokit, GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO, PATCHER_VERSION, token);
+    core.startGroup("Downloading Patcher and patch tools");
+    await downloadAndSetupTooling(octokit, token);
     core.endGroup();
-    core.startGroup("Granting permissions to Patcher's binary");
-    await exec.exec("chmod", ["+x", patcherPath]);
-    core.endGroup();
-    await runPatcher(octokit, gitCommiter, patcherPath, command, {
+    await runPatcher(octokit, gitCommiter, command, {
         updateStrategy,
         dependency,
         workingDir,

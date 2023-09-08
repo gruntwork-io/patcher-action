@@ -1,5 +1,6 @@
 import * as os from "os";
 import * as yaml from "yaml";
+import * as path from "path";
 
 import * as github from "@actions/github";
 import * as toolCache from "@actions/tool-cache";
@@ -12,7 +13,14 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
 const PATCHER_VERSION = "v0.4.3";
-const PATCHER_BINARY_PATH = "/tmp/patcher";
+const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
+const TERRAPATCH_VERSION = "v0.1.3";
+
+const HCLEDIT_ORG = "minamijoyo";
+const TFUPDATE_GITHUB_REPO = "tfupdate";
+const TFUPDATE_VERSION = "v0.6.5";
+const HCLEDIT_GITHUB_REPO = "hcledit";
+const HCLEDIT_VERSION = "v0.2.5";
 
 const REPORT_COMMAND = "report";
 const UPDATE_COMMAND = "update";
@@ -37,6 +45,45 @@ type GitCommitter = {
   name: string;
   email: string;
 };
+
+export interface PatcherUpdateSummary {
+  successful_updates: SuccessfulUpdate[];
+  manual_steps_you_must_follow: ManualStepsYouMustFollow[];
+}
+
+export interface ManualStepsYouMustFollow {
+  instructions_file_path: string;
+}
+
+export interface SuccessfulUpdate {
+  file_path: string;
+  updated_modules: UpdatedModule[];
+}
+
+export interface UpdatedModule {
+  repo: string;
+  module: string;
+  previous_version: string;
+  updated_version: string;
+  next_breaking_version: NextBreakingVersion;
+  patches_applied: PatchesApplied;
+}
+
+export interface NextBreakingVersion {
+  version: string;
+  release_notes_url: string;
+}
+
+export interface PatchesApplied {
+  slugs: string[];
+  manual_scripts: string[];
+  count: number;
+}
+
+interface DownloadedBinary {
+  folder: string;
+  name: string;
+}
 
 function osPlatform() {
   const platform = os.platform();
@@ -84,40 +131,6 @@ function pullRequestTitle(dependency: string, workingDir: string): string {
   }
 
   return title;
-}
-
-export interface PatcherUpdateSummary {
-  successful_updates: SuccessfulUpdate[];
-  manual_steps_you_must_follow: ManualStepsYouMustFollow[];
-}
-
-export interface ManualStepsYouMustFollow {
-  instructions_file_path: string;
-}
-
-export interface SuccessfulUpdate {
-  file_path: string;
-  updated_modules: UpdatedModule[];
-}
-
-export interface UpdatedModule {
-  repo: string;
-  module: string;
-  previous_version: string;
-  updated_version: string;
-  next_breaking_version: NextBreakingVersion;
-  patches_applied: PatchesApplied;
-}
-
-export interface NextBreakingVersion {
-  version: string;
-  release_notes_url: string;
-}
-
-export interface PatchesApplied {
-  slugs: string[];
-  manual_scripts: string[];
-  count: number;
 }
 
 function pullRequestReleaseNotesBreakingVersion(
@@ -274,14 +287,43 @@ async function openPullRequest(
   }
 }
 
-async function downloadPatcherBinary(
+function repoToBinaryMap(repo: string): string {
+  switch (repo) {
+    case "patcher-cli":
+      return "patcher";
+    case "terrapatch-cli":
+      return "terrapatch";
+    default:
+      return repo;
+  }
+}
+
+async function setupBinaryInEnv(binary: DownloadedBinary) {
+  const binaryPath = path.join(binary.folder, binary.name);
+
+  core.addPath(binary.folder);
+
+  await exec.exec("chmod", ["+x", binaryPath]);
+}
+
+async function downloadGitHubBinary(
   octokit: GitHub,
   owner: string,
   repo: string,
   tag: string,
   token: string,
-): Promise<string> {
-  core.info(`Downloading Patcher version ${tag}`);
+): Promise<DownloadedBinary> {
+  const binaryName = repoToBinaryMap(repo);
+
+  // Before downloading, check the cache.
+  const pathInCache = toolCache.find(repo, tag);
+  if (pathInCache) {
+    core.info(`Found ${owner}/${repo} version ${tag} in cache!`);
+
+    return { folder: pathInCache, name: binaryName };
+  }
+
+  core.info(`Downloading ${owner}/${repo} version ${tag}`);
 
   const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({
     owner,
@@ -296,14 +338,15 @@ async function downloadPatcherBinary(
 
   if (!asset) {
     throw new Error(
-      `Can not find Patcher release for ${tag} in platform ${re}.`,
+      `Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`,
     );
   }
 
-  // Use @actions/tool-cache to download Patcher's binary from GitHub
-  const patcherBinaryPath = await toolCache.downloadTool(
+  // Use @actions/tool-cache to download the binary from GitHub
+  const downloadedPath = await toolCache.downloadTool(
     asset.url,
-    PATCHER_BINARY_PATH,
+    // Don't set a destination path. It will default to a temporary one.
+    undefined,
     `token ${token}`,
     {
       accept: "application/octet-stream",
@@ -311,9 +354,64 @@ async function downloadPatcherBinary(
   );
 
   core.debug(
-    `Patcher version '${tag}' has been downloaded at ${patcherBinaryPath}`,
+    `${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`,
   );
-  return patcherBinaryPath;
+
+  if (path.extname(asset.name) === ".gz") {
+    await exec.exec(`mkdir ${binaryName}`);
+    await exec.exec(`tar -C ${binaryName} -xzvf ${downloadedPath}`);
+
+    const extractedPath = path.join(binaryName, binaryName);
+
+    const cachedPath = await toolCache.cacheFile(
+      extractedPath,
+      binaryName,
+      repo,
+      tag,
+    );
+    core.debug(`Cached in ${cachedPath}`);
+
+    return { folder: cachedPath, name: binaryName };
+  }
+
+  const cachedPath = await toolCache.cacheFile(
+    downloadedPath,
+    binaryName,
+    repo,
+    tag,
+  );
+  core.debug(`Cached in ${cachedPath}`);
+
+  return { folder: cachedPath, name: binaryName };
+}
+
+async function downloadAndSetupTooling(octokit: GitHub, token: string) {
+  // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
+  const tools = [
+    {
+      org: GRUNTWORK_GITHUB_ORG,
+      repo: PATCHER_GITHUB_REPO,
+      version: PATCHER_VERSION,
+    },
+    {
+      org: GRUNTWORK_GITHUB_ORG,
+      repo: TERRAPATCH_GITHUB_REPO,
+      version: TERRAPATCH_VERSION,
+    },
+    { org: HCLEDIT_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
+    { org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION },
+  ];
+
+  for await (const { org, repo, version } of tools) {
+    const binary = await downloadGitHubBinary(
+      octokit,
+      org,
+      repo,
+      version,
+      token,
+    );
+    await setupBinaryInEnv(binary);
+  }
 }
 
 function isPatcherCommandValid(command: string): boolean {
@@ -359,7 +457,6 @@ function getPatcherEnvVars(token: string): { [key: string]: string } {
 async function runPatcher(
   octokit: GitHub,
   gitCommiter: GitCommitter,
-  binaryPath: string,
   command: string,
   { updateStrategy, dependency, workingDir, token }: PatcherCliArgs,
 ): Promise<void> {
@@ -367,7 +464,7 @@ async function runPatcher(
     case REPORT_COMMAND: {
       core.startGroup("Running 'patcher report'");
       const reportOutput = await exec.getExecOutput(
-        binaryPath,
+        "patcher",
         [command, NON_INTERACTIVE_FLAG, workingDir],
         { env: getPatcherEnvVars(token) },
       );
@@ -382,7 +479,7 @@ async function runPatcher(
     default: {
       core.startGroup("Running 'patcher update'");
       const updateOutput = await exec.getExecOutput(
-        binaryPath,
+        "patcher",
         updateArgs(updateStrategy, dependency, workingDir),
         { env: getPatcherEnvVars(token) },
       );
@@ -474,21 +571,11 @@ export async function run() {
   // Validate if 'commit_author' has a valid format.
   const gitCommiter = parseCommitAuthor(commitAuthor);
 
-  core.startGroup("Downloading Patcher");
-  const patcherPath = await downloadPatcherBinary(
-    octokit,
-    GRUNTWORK_GITHUB_ORG,
-    PATCHER_GITHUB_REPO,
-    PATCHER_VERSION,
-    token,
-  );
+  core.startGroup("Downloading Patcher and patch tools");
+  await downloadAndSetupTooling(octokit, token);
   core.endGroup();
 
-  core.startGroup("Granting permissions to Patcher's binary");
-  await exec.exec("chmod", ["+x", patcherPath]);
-  core.endGroup();
-
-  await runPatcher(octokit, gitCommiter, patcherPath, command, {
+  await runPatcher(octokit, gitCommiter, command, {
     updateStrategy,
     dependency,
     workingDir,
