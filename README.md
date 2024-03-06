@@ -38,3 +38,18 @@ steps:
 
 Refer to the [Promotion Workflows with Terraform](https://blog.gruntwork.io/promotion-workflows-with-terraform-13c05bed953d).
 
+## Developer Setup
+
+If you need to make changes to the action, you can build it locally with the following commands:
+
+```sh
+# install dependencies
+yarn
+
+# run the tests
+yarn test
+
+# build a release
+yarn build
+```
+
