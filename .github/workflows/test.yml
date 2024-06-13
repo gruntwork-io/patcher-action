@@ -1,4 +1,4 @@
-name: 'Patcher Tests'
+name: "Patcher Tests"
 
 on:
   push:
@@ -11,14 +11,13 @@ jobs:
     outputs:
       dependencies: ${{ steps.run-report.outputs.dependencies }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Patcher
         id: run-report
         uses: ./
         with:
           patcher_command: report
           working_dir: infrastructure-live
-
 
   patcher-update:
     needs: [patcher-report]
@@ -27,7 +26,7 @@ jobs:
       matrix:
         dependency: ${{ fromJson(needs.patcher-report.outputs.dependencies) }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Patcher
         uses: ./
         with:
