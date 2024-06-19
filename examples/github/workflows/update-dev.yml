@@ -5,7 +5,7 @@ on:
     types: [new_module_release]
   schedule:
     # 04:15 UTC on Mondays
-    - cron: '15 4 * * 1'
+    - cron: "15 4 * * 1"
   pull_request_target:
     types:
       - closed
@@ -23,8 +23,9 @@ jobs:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'updates-dev')
     runs-on: ubuntu-latest
     steps:
-      - uses: peter-evans/repository-dispatch@v2
+      - uses: peter-evans/repository-dispatch@v3
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           event-type: dev_updates_merged
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}", "branch": "${{ github.head_ref }}" }'
@@ -33,7 +34,7 @@ jobs:
     if: github.event_name == 'repository_dispatch' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Create trigger source message
         if: github.event_name == 'repository_dispatch'
         id: trigger_event

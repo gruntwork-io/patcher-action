@@ -16,7 +16,7 @@ jobs:
     if: github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: gruntwork-io/patcher-action@v1
         with:
           working_dir: ${{ env.ENV_FOLDER_NAME }}
