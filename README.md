@@ -16,7 +16,7 @@ It will run `patcher update` in the whole repo, and open a Pull Request with the
 
 ```yaml
 steps:
-  - uses: actions/checkout@v3
+  - uses: actions/checkout@v4
   - uses: gruntwork-io/patcher-action
 ```
 

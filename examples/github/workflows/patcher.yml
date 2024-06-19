@@ -9,11 +9,11 @@ jobs:
     name: Check for README-TO-COMPLETE-UPDATE.md files
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
+      - uses: actions/checkout@v4
+
       - name: Check file existence
         id: check_files
-        uses: andstor/file-existence-action@v1
+        uses: andstor/file-existence-action@v3
         with:
           files: "**/README-TO-COMPLETE-UPDATE.md"
 
