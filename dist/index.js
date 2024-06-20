@@ -13562,12 +13562,12 @@ function osPlatform() {
             throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
     }
 }
-// pullRequestBranch formats the branch name. When dependency and workingDir are provided, the branch format will be
-// patcher-dev-updates-gruntwork-io/terraform-aws-vpc/vpc-app`.
-function pullRequestBranch(dependency, workingDir) {
+// pullRequestBranch formats the branch name. When prefix and dependency are provided, the branch format will be
+// patcher-prefix-updates-gruntwork-io/terraform-aws-vpc/vpc-app`.
+function pullRequestBranch(prefix, dependency) {
     let branch = "patcher";
-    if (workingDir) {
-        branch += `-${workingDir}`;
+    if (prefix) {
+        branch += `-${prefix}`;
     }
     branch += "-updates";
     if (dependency) {
@@ -13575,12 +13575,12 @@ function pullRequestBranch(dependency, workingDir) {
     }
     return branch;
 }
-// pullRequestTitle formats the Pull Request title. When dependency and workingDir are provided, the title will be
-// [Patcher] [dev] Update gruntwork-io/terraform-aws-vpc/vpc-app dependency
-function pullRequestTitle(dependency, workingDir) {
+// pullRequestTitle formats the Pull Request title. When prefix and dependency are provided, the title will be
+// [Patcher] [prefix] Update gruntwork-io/terraform-aws-vpc/vpc-app dependency
+function pullRequestTitle(prefix, dependency) {
     let title = "[Patcher]";
-    if (workingDir) {
-        title += ` [${workingDir}]`;
+    if (prefix) {
+        title += ` [${prefix}]`;
     }
     if (dependency) {
         title += ` Update ${dependency} dependency`;
@@ -13657,16 +13657,11 @@ async function wasCodeUpdated() {
     // If there are changes, they will appear in the stdout. Otherwise, it returns blank.
     return !!output.stdout;
 }
-async function commitAndPushChanges(gitCommiter, dependency, workingDir, token) {
+async function commitAndPushChanges(gitCommiter, dependency, prPrefix, token) {
     const { owner, repo } = github.context.repo;
-    const head = pullRequestBranch(dependency, workingDir);
+    const head = pullRequestBranch(prPrefix, dependency);
     // Setup https auth and https remote url
-    await exec.exec("git", [
-        "remote",
-        "set-url",
-        "origin",
-        `https://${token}@github.com/${owner}/${repo}.git`,
-    ]);
+    await exec.exec("git", ["remote", "set-url", "origin", `https://${token}@github.com/${owner}/${repo}.git`]);
     // Setup committer name and email
     await exec.exec("git", ["config", "user.name", gitCommiter.name]);
     await exec.exec("git", ["config", "user.email", gitCommiter.email]);
@@ -13676,18 +13671,13 @@ async function commitAndPushChanges(gitCommiter, dependency, workingDir, token) 
     const commitMessage = "Update dependencies using Patcher by Gruntwork";
     await exec.exec("git", ["commit", "-m", commitMessage]);
     // Push changes to head branch
-    await exec.exec("git", [
-        "push",
-        "--force",
-        "origin",
-        `${head}:refs/heads/${head}`,
-    ]);
+    await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`]);
 }
-async function openPullRequest(octokit, gitCommiter, patcherRawOutput, dependency, workingDir) {
+async function openPullRequest(octokit, gitCommiter, patcherRawOutput, dependency, prPrefix) {
     var _a;
     const { repo } = github.context;
-    const head = pullRequestBranch(dependency, workingDir);
-    const title = pullRequestTitle(dependency, workingDir);
+    const head = pullRequestBranch(prPrefix, dependency);
+    const title = pullRequestTitle(prPrefix, dependency);
     const body = pullRequestBody(patcherRawOutput, dependency);
     const repoDetails = await octokit.rest.repos.get({ ...repo });
     const base = repoDetails.data.default_branch;
@@ -13781,13 +13771,12 @@ async function downloadAndSetupTooling(octokit, token) {
 function isPatcherCommandValid(command) {
     return VALID_COMMANDS.includes(command);
 }
-function updateArgs(updateStrategy, dependency, workingDir) {
-    let args = [
-        "update",
-        NO_COLOR_FLAG,
-        NON_INTERACTIVE_FLAG,
-        SKIP_CONTAINER_FLAG,
-    ];
+function updateArgs(updateStrategy, dependency, workingDirs, noColor) {
+    let args = ["update", NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
+    // If noColor is passed, set the flag to disable color output.
+    if (noColor) {
+        args = args.concat(NO_COLOR_FLAG);
+    }
     // If updateStrategy or dependency are not empty, assign them with the appropriate flag.
     // If they are invalid, Patcher will return an error, which will cause the Action to fail.
     if (updateStrategy !== "") {
@@ -13797,7 +13786,9 @@ function updateArgs(updateStrategy, dependency, workingDir) {
     if (dependency !== "") {
         args = args.concat(`${TARGET_FLAG}=${dependency}`);
     }
-    return args.concat([workingDir]);
+    // Pass each working directory as a separate argument
+    args = args.concat(workingDirs);
+    return args;
 }
 function getPatcherEnvVars(token) {
     const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
@@ -13807,11 +13798,15 @@ function getPatcherEnvVars(token) {
         PATCHER_TELEMETRY_ID: telemetryId,
     };
 }
-async function runPatcher(octokit, gitCommiter, command, { updateStrategy, dependency, workingDir, token }) {
+async function runPatcher(octokit, gitCommiter, command, { updateStrategy, dependency, workingDirs, noColor, prPrefix, token }) {
     switch (command) {
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
-            const reportOutput = await exec.getExecOutput("patcher", [command, NON_INTERACTIVE_FLAG, workingDir], { env: getPatcherEnvVars(token) });
+            let args = ["report", NON_INTERACTIVE_FLAG];
+            args = args.concat(workingDirs);
+            const reportOutput = await exec.getExecOutput("patcher", args, {
+                env: getPatcherEnvVars(token),
+            });
             core.endGroup();
             core.startGroup("Setting 'dependencies' output");
             core.setOutput("dependencies", reportOutput.stdout);
@@ -13820,14 +13815,14 @@ async function runPatcher(octokit, gitCommiter, command, { updateStrategy, depen
         }
         default: {
             core.startGroup("Running 'patcher update'");
-            const updateOutput = await exec.getExecOutput("patcher", updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
+            const updateOutput = await exec.getExecOutput("patcher", updateArgs(updateStrategy, dependency, workingDirs, noColor), { env: getPatcherEnvVars(token) });
             core.endGroup();
             if (await wasCodeUpdated()) {
                 core.startGroup("Commit and push changes");
-                await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
+                await commitAndPushChanges(gitCommiter, dependency, prPrefix, token);
                 core.endGroup();
                 core.startGroup("Opening pull request");
-                await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir);
+                await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, prPrefix);
                 core.endGroup();
             }
             else {
@@ -13849,6 +13844,27 @@ function parseCommitAuthor(commitAuthor) {
     }
     throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
 }
+function IsValidJson(str) {
+    try {
+        JSON.parse(str);
+    }
+    catch (e) {
+        return false;
+    }
+    return true;
+}
+function StringArrayFromJson(json) {
+    if (json != null && typeof json === "string" && !IsValidJson(json)) {
+        json = `[${json}]`;
+    }
+    if (json == null) {
+        json = "[]";
+    }
+    if (!IsValidJson(json)) {
+        throw new Error(`Invalid JSON: ${json}`);
+    }
+    return JSON.parse(json);
+}
 async function validateAccessToPatcherCli(octokit) {
     try {
         await octokit.rest.repos.get({
@@ -13869,9 +13885,11 @@ async function run() {
     const token = core.getInput("github_token");
     const command = core.getInput("patcher_command");
     const updateStrategy = core.getInput("update_strategy");
+    const noColor = core.getInput("no_color") == "true";
     const dependency = core.getInput("dependency");
     const workingDir = core.getInput("working_dir");
     const commitAuthor = core.getInput("commit_author");
+    const workingDirs = StringArrayFromJson(core.getInput("working_dirs")) || "[]";
     // Always mask the `token` string in the logs.
     core.setSecret(token);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
@@ -13890,7 +13908,9 @@ async function run() {
     await runPatcher(octokit, gitCommiter, command, {
         updateStrategy,
         dependency,
-        workingDir,
+        workingDirs: workingDirs.length > 0 ? workingDirs : [workingDir],
+        noColor,
+        prPrefix: "",
         token,
     });
 }
