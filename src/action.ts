@@ -92,9 +92,7 @@ function osPlatform() {
     case "darwin":
       return platform;
     default:
-      throw new Error(
-        "Unsupported operating system - the Patcher action is only released for Darwin and Linux",
-      );
+      throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
   }
 }
 
@@ -133,9 +131,7 @@ function pullRequestTitle(dependency: string, workingDir: string): string {
   return title;
 }
 
-function pullRequestReleaseNotesBreakingVersion(
-  nextBreakingVersion: NextBreakingVersion,
-): string {
+function pullRequestReleaseNotesBreakingVersion(nextBreakingVersion: NextBreakingVersion): string {
   if (nextBreakingVersion) {
     return `([Release notes for ${nextBreakingVersion.version}](${nextBreakingVersion.release_notes_url}))`;
   }
@@ -155,22 +151,20 @@ function pullRequestBodyUpdatedModules(modules: UpdatedModule[]): string {
   return modules
     .map(
       (module) => `  - Previous version: \`${module.previous_version}\`
-  - Updated version: \`${
-    module.updated_version
-  }\` ${pullRequestReleaseNotesBreakingVersion(module.next_breaking_version)}
-  ${pullRequestPatchesApplied(module.patches_applied)}`,
+  - Updated version: \`${module.updated_version}\` ${pullRequestReleaseNotesBreakingVersion(
+    module.next_breaking_version
+  )}
+  ${pullRequestPatchesApplied(module.patches_applied)}`
     )
     .join("\n");
 }
 
-function pullRequestBodySuccessfulUpdates(
-  updatedModules: SuccessfulUpdate[],
-): string {
+function pullRequestBodySuccessfulUpdates(updatedModules: SuccessfulUpdate[]): string {
   if (updatedModules && updatedModules.length > 0) {
     return updatedModules
       .map(
         (module) => `- \`${module.file_path}\`
-${pullRequestBodyUpdatedModules(module.updated_modules)}`,
+${pullRequestBodyUpdatedModules(module.updated_modules)}`
       )
       .join("\n");
   }
@@ -178,9 +172,7 @@ ${pullRequestBodyUpdatedModules(module.updated_modules)}`,
   return "";
 }
 
-function pullRequestBodyReadmeToUpdate(
-  manualSteps: ManualStepsYouMustFollow[],
-): string {
+function pullRequestBodyReadmeToUpdate(manualSteps: ManualStepsYouMustFollow[]): string {
   if (manualSteps && manualSteps.length > 0) {
     return `\n1. Follow the instructions outlined in the \`README-TO-COMPLETE-UPDATE.md\` file and delete it once the update is complete.`;
   }
@@ -188,10 +180,7 @@ function pullRequestBodyReadmeToUpdate(
   return "";
 }
 
-export function pullRequestBody(
-  patcherRawOutput: string,
-  dependency: string,
-): string {
+export function pullRequestBody(patcherRawOutput: string, dependency: string): string {
   const updateSummary = yaml.parse(patcherRawOutput) as PatcherUpdateSummary;
 
   return `:robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
@@ -216,7 +205,7 @@ ${patcherRawOutput}
 ## Steps to review
 
 1. Check the proposed changes to the \`terraform\` and/or \`terragrunt\` configuration files.${pullRequestBodyReadmeToUpdate(
-    updateSummary.manual_steps_you_must_follow,
+    updateSummary.manual_steps_you_must_follow
   )}
 1. Validate the changes in the infrastructure by running \`terraform/terragrunt plan\`.
 1. Upon approval, proceed with deploying the infrastructure changes.`;
@@ -228,22 +217,12 @@ async function wasCodeUpdated() {
   return !!output.stdout;
 }
 
-async function commitAndPushChanges(
-  gitCommiter: GitCommitter,
-  dependency: string,
-  workingDir: string,
-  token: string,
-) {
+async function commitAndPushChanges(gitCommiter: GitCommitter, dependency: string, workingDir: string, token: string) {
   const { owner, repo } = github.context.repo;
   const head = pullRequestBranch(dependency, workingDir);
 
   // Setup https auth and https remote url
-  await exec.exec("git", [
-    "remote",
-    "set-url",
-    "origin",
-    `https://${token}@github.com/${owner}/${repo}.git`,
-  ]);
+  await exec.exec("git", ["remote", "set-url", "origin", `https://${token}@github.com/${owner}/${repo}.git`]);
 
   // Setup committer name and email
   await exec.exec("git", ["config", "user.name", gitCommiter.name]);
@@ -257,12 +236,7 @@ async function commitAndPushChanges(
   await exec.exec("git", ["commit", "-m", commitMessage]);
 
   // Push changes to head branch
-  await exec.exec("git", [
-    "push",
-    "--force",
-    "origin",
-    `${head}:refs/heads/${head}`,
-  ]);
+  await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`]);
 }
 
 async function openPullRequest(
@@ -270,7 +244,7 @@ async function openPullRequest(
   gitCommiter: GitCommitter,
   patcherRawOutput: string,
   dependency: string,
-  workingDir: string,
+  workingDir: string
 ) {
   const { repo } = github.context;
 
@@ -286,9 +260,7 @@ async function openPullRequest(
     await octokit.rest.pulls.create({ ...repo, title, head, base, body });
   } catch (error: any) {
     if (error.message?.includes(`A pull request already exists for`)) {
-      core.error(
-        `A pull request for ${head} already exists. The branch was updated.`,
-      );
+      core.error(`A pull request for ${head} already exists. The branch was updated.`);
     } else {
       throw error;
     }
@@ -319,7 +291,7 @@ async function downloadGitHubBinary(
   owner: string,
   repo: string,
   tag: string,
-  token: string,
+  token: string
 ): Promise<DownloadedBinary> {
   const binaryName = repoToBinaryMap(repo);
 
@@ -340,14 +312,10 @@ async function downloadGitHubBinary(
   });
 
   const re = new RegExp(`${osPlatform()}.*amd64`);
-  const asset = getReleaseResponse.data.assets.find((obj: any) =>
-    re.test(obj.name),
-  );
+  const asset = getReleaseResponse.data.assets.find((obj: any) => re.test(obj.name));
 
   if (!asset) {
-    throw new Error(
-      `Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`,
-    );
+    throw new Error(`Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`);
   }
 
   // Use @actions/tool-cache to download the binary from GitHub
@@ -358,12 +326,10 @@ async function downloadGitHubBinary(
     `token ${token}`,
     {
       accept: "application/octet-stream",
-    },
+    }
   );
 
-  core.debug(
-    `${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`,
-  );
+  core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
 
   if (path.extname(asset.name) === ".gz") {
     await exec.exec(`mkdir /tmp/${binaryName}`);
@@ -371,23 +337,13 @@ async function downloadGitHubBinary(
 
     const extractedPath = path.join("/tmp", binaryName, binaryName);
 
-    const cachedPath = await toolCache.cacheFile(
-      extractedPath,
-      binaryName,
-      repo,
-      tag,
-    );
+    const cachedPath = await toolCache.cacheFile(extractedPath, binaryName, repo, tag);
     core.debug(`Cached in ${cachedPath}`);
 
     return { folder: cachedPath, name: binaryName };
   }
 
-  const cachedPath = await toolCache.cacheFile(
-    downloadedPath,
-    binaryName,
-    repo,
-    tag,
-  );
+  const cachedPath = await toolCache.cacheFile(downloadedPath, binaryName, repo, tag);
   core.debug(`Cached in ${cachedPath}`);
 
   return { folder: cachedPath, name: binaryName };
@@ -411,13 +367,7 @@ async function downloadAndSetupTooling(octokit: GitHub, token: string) {
   ];
 
   for await (const { org, repo, version } of tools) {
-    const binary = await downloadGitHubBinary(
-      octokit,
-      org,
-      repo,
-      version,
-      token,
-    );
+    const binary = await downloadGitHubBinary(octokit, org, repo, version, token);
     await setupBinaryInEnv(binary);
   }
 }
@@ -426,17 +376,8 @@ function isPatcherCommandValid(command: string): boolean {
   return VALID_COMMANDS.includes(command);
 }
 
-function updateArgs(
-  updateStrategy: string,
-  dependency: string,
-  workingDir: string,
-): string[] {
-  let args = [
-    "update",
-    NO_COLOR_FLAG,
-    NON_INTERACTIVE_FLAG,
-    SKIP_CONTAINER_FLAG,
-  ];
+function updateArgs(updateStrategy: string, dependency: string, workingDir: string): string[] {
+  let args = ["update", NO_COLOR_FLAG, NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
 
   // If updateStrategy or dependency are not empty, assign them with the appropriate flag.
   // If they are invalid, Patcher will return an error, which will cause the Action to fail.
@@ -466,16 +407,14 @@ async function runPatcher(
   octokit: GitHub,
   gitCommiter: GitCommitter,
   command: string,
-  { updateStrategy, dependency, workingDir, token }: PatcherCliArgs,
+  { updateStrategy, dependency, workingDir, token }: PatcherCliArgs
 ): Promise<void> {
   switch (command) {
     case REPORT_COMMAND: {
       core.startGroup("Running 'patcher report'");
-      const reportOutput = await exec.getExecOutput(
-        "patcher",
-        [command, NON_INTERACTIVE_FLAG, workingDir],
-        { env: getPatcherEnvVars(token) },
-      );
+      const reportOutput = await exec.getExecOutput("patcher", [command, NON_INTERACTIVE_FLAG, workingDir], {
+        env: getPatcherEnvVars(token),
+      });
       core.endGroup();
 
       core.startGroup("Setting 'dependencies' output");
@@ -486,11 +425,9 @@ async function runPatcher(
     }
     default: {
       core.startGroup("Running 'patcher update'");
-      const updateOutput = await exec.getExecOutput(
-        "patcher",
-        updateArgs(updateStrategy, dependency, workingDir),
-        { env: getPatcherEnvVars(token) },
-      );
+      const updateOutput = await exec.getExecOutput("patcher", updateArgs(updateStrategy, dependency, workingDir), {
+        env: getPatcherEnvVars(token),
+      });
       core.endGroup();
 
       if (await wasCodeUpdated()) {
@@ -499,18 +436,10 @@ async function runPatcher(
         core.endGroup();
 
         core.startGroup("Opening pull request");
-        await openPullRequest(
-          octokit,
-          gitCommiter,
-          updateOutput.stdout,
-          dependency,
-          workingDir,
-        );
+        await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir);
         core.endGroup();
       } else {
-        core.info(
-          `No changes in ${dependency} after running Patcher. No further action is necessary.`,
-        );
+        core.info(`No changes in ${dependency} after running Patcher. No further action is necessary.`);
       }
 
       return;
@@ -533,9 +462,7 @@ function parseCommitAuthor(commitAuthor: string): GitCommitter {
     return { name, email };
   }
 
-  throw Error(
-    `Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`,
-  );
+  throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
 }
 
 async function validateAccessToPatcherCli(octokit: GitHub) {
@@ -547,7 +474,7 @@ async function validateAccessToPatcherCli(octokit: GitHub) {
   } catch (error: any) {
     if (error.message.includes("Not Found")) {
       throw Error(
-        `Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`,
+        `Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`
       );
     } else {
       throw error;

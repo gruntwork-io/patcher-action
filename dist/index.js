@@ -13661,12 +13661,7 @@ async function commitAndPushChanges(gitCommiter, dependency, workingDir, token) 
     const { owner, repo } = github.context.repo;
     const head = pullRequestBranch(dependency, workingDir);
     // Setup https auth and https remote url
-    await exec.exec("git", [
-        "remote",
-        "set-url",
-        "origin",
-        `https://${token}@github.com/${owner}/${repo}.git`,
-    ]);
+    await exec.exec("git", ["remote", "set-url", "origin", `https://${token}@github.com/${owner}/${repo}.git`]);
     // Setup committer name and email
     await exec.exec("git", ["config", "user.name", gitCommiter.name]);
     await exec.exec("git", ["config", "user.email", gitCommiter.email]);
@@ -13676,12 +13671,7 @@ async function commitAndPushChanges(gitCommiter, dependency, workingDir, token) 
     const commitMessage = "Update dependencies using Patcher by Gruntwork";
     await exec.exec("git", ["commit", "-m", commitMessage]);
     // Push changes to head branch
-    await exec.exec("git", [
-        "push",
-        "--force",
-        "origin",
-        `${head}:refs/heads/${head}`,
-    ]);
+    await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`]);
 }
 async function openPullRequest(octokit, gitCommiter, patcherRawOutput, dependency, workingDir) {
     var _a;
@@ -13782,12 +13772,7 @@ function isPatcherCommandValid(command) {
     return VALID_COMMANDS.includes(command);
 }
 function updateArgs(updateStrategy, dependency, workingDir) {
-    let args = [
-        "update",
-        NO_COLOR_FLAG,
-        NON_INTERACTIVE_FLAG,
-        SKIP_CONTAINER_FLAG,
-    ];
+    let args = ["update", NO_COLOR_FLAG, NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
     // If updateStrategy or dependency are not empty, assign them with the appropriate flag.
     // If they are invalid, Patcher will return an error, which will cause the Action to fail.
     if (updateStrategy !== "") {
@@ -13811,7 +13796,9 @@ async function runPatcher(octokit, gitCommiter, command, { updateStrategy, depen
     switch (command) {
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
-            const reportOutput = await exec.getExecOutput("patcher", [command, NON_INTERACTIVE_FLAG, workingDir], { env: getPatcherEnvVars(token) });
+            const reportOutput = await exec.getExecOutput("patcher", [command, NON_INTERACTIVE_FLAG, workingDir], {
+                env: getPatcherEnvVars(token),
+            });
             core.endGroup();
             core.startGroup("Setting 'dependencies' output");
             core.setOutput("dependencies", reportOutput.stdout);
@@ -13820,7 +13807,9 @@ async function runPatcher(octokit, gitCommiter, command, { updateStrategy, depen
         }
         default: {
             core.startGroup("Running 'patcher update'");
-            const updateOutput = await exec.getExecOutput("patcher", updateArgs(updateStrategy, dependency, workingDir), { env: getPatcherEnvVars(token) });
+            const updateOutput = await exec.getExecOutput("patcher", updateArgs(updateStrategy, dependency, workingDir), {
+                env: getPatcherEnvVars(token),
+            });
             core.endGroup();
             if (await wasCodeUpdated()) {
                 core.startGroup("Commit and push changes");
