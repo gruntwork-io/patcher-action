@@ -19,14 +19,11 @@
     "@actions/exec": "^1.1.1",
     "@actions/github": "^5.1.1",
     "@actions/tool-cache": "^2.0.1",
-    "@octokit/plugin-throttling": "^7.0.0",
-    "@types/jest": "^29.5.4",
-    "@vercel/ncc": "^0.36.1",
-    "js-yaml": "^4.1.0",
-    "os": "^0.1.2",
-    "yaml": "^2.3.1"
+    "@octokit/plugin-throttling": "^7.0.0"
   },
   "devDependencies": {
+    "@vercel/ncc": "^0.36.1",
+    "@types/jest": "^29.5.4",
     "@jest/globals": "^29.6.4",
     "@types/node": "^20.5.0",
     "@typescript-eslint/eslint-plugin": "^6.6.0",
