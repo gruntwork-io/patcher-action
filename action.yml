@@ -27,7 +27,7 @@ inputs:
   commit_author:
     description: >
       "Author of the Pull Request's commits in the format 'Name <name@email.com>'. The permissions to push the changes
-      "and to create the Pull Request are from 'github_token'. Defaults to gruntwork-patcher."
+      "and to create the Pull Request are from 'github_token'. Defaults to gruntwork-patcher-bot."
     default: "gruntwork-patcher-bot <patcher@gruntwork.io>"
 
 outputs:
