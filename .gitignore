@@ -3,6 +3,7 @@
 
 ### Intellij ###
 .idea/
+.vscode
 
 ### Node ###
 # Logs
