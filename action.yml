@@ -13,26 +13,41 @@ inputs:
   patcher_command:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"
+  include_dirs:
+    description: >
+      "Include only directories matching the given double-star glob pattern. Only works for `report`."
+      "Example: `{*dev*}/**`"
+    default: ""
+  exclude_dirs:
+    description: >
+      "Exclude any directories matching the given double-star glob pattern. Only works for `report`."
+      "Example: `"{*alb*}/**"`"
+    default: ""
   update_strategy:
     description: "Update strategy. Only used when running 'update'. Defaults to 'next-breaking'."
     default: "next-breaking"
+  spec_file:
+    description: "Default name of the upgrade specification."
+    default: "spec.json"
   dependency:
     description: >
-      "Target the update to a single dependency. Format: <org>/<repo>/<name>."
+      "Limit the update to a single dependency. Format: <org>/<repo>/<name>."
       "Example: gruntwork-io/terraform-aws-service-catalog/services/ecs-module."
   working_dir:
     description: "Directory where Patcher should run. If empty, it will run in the whole repo."
   commit_author:
     description: >
       "Author of the Pull Request's commits in the format 'Name <name@email.com>'. The permissions to push the changes
-      "and to create the Pull Request are from 'github_token'. Defaults to gruntwork-patcher."
-    default: 'gruntwork-patcher-bot <patcher@gruntwork.io>'
+      "and to create the Pull Request are from 'github_token'. Defaults to gruntwork-patcher-bot."
+    default: "gruntwork-patcher-bot <patcher@gruntwork.io>"
+  env_tag:
+    description: "The environment tag to use when creating branches and pull requests. Defaults to 'dev'."
+    default: "dev"
 
 outputs:
   dependencies:
     description: "Terraform and Terragrunt dependencies from the given directory. Only works for 'report'."
 
 runs:
-  using: 'node16'
-  main: 'dist/index.js'
-
+  using: "node20"
+  main: "dist/index.js"

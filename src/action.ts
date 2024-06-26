@@ -12,9 +12,9 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
-const PATCHER_VERSION = "v0.8.4";
+const PATCHER_VERSION = "v0.9.0";
 const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
-const TERRAPATCH_VERSION = "v0.1.3";
+const TERRAPATCH_VERSION = "v0.1.5";
 
 const HCLEDIT_ORG = "minamijoyo";
 const TFUPDATE_GITHUB_REPO = "tfupdate";
@@ -28,14 +28,27 @@ const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
 
 const NON_INTERACTIVE_FLAG = "--non-interactive";
 const NO_COLOR_FLAG = "--no-color";
+const INCLUDE_DIRS_FLAG = "--include-dirs";
+const EXCLUDE_DIRS_FLAG = "--exclude-dirs";
 const SKIP_CONTAINER_FLAG = "--skip-container-runtime";
 const UPDATE_STRATEGY_FLAG = "--update-strategy";
-const TARGET_FLAG = "--target";
+
+const OUTPUT_SPEC_FLAG = "--output-spec";
+const SPEC_FILE_FLAG = "--spec-file";
+const SPEC_TARGET_FLAG = "--spec-target";
+
+const PUBLISH_FLAG = "--publish";
+const PR_TITLE_FLAG = "--pr-title";
+const PR_BRANCH_FLAG = "--pr-branch";
 
 // Define types
 
 type PatcherCliArgs = {
+  specFile: string;
+  includeDirs: string;
+  excludeDirs: string;
   updateStrategy: string;
+  envTag: string;
   dependency: string;
   workingDir: string;
   token: string;
@@ -45,40 +58,6 @@ type GitCommitter = {
   name: string;
   email: string;
 };
-
-export interface PatcherUpdateSummary {
-  successful_updates: SuccessfulUpdate[];
-  manual_steps_you_must_follow: ManualStepsYouMustFollow[];
-}
-
-export interface ManualStepsYouMustFollow {
-  instructions_file_path: string;
-}
-
-export interface SuccessfulUpdate {
-  file_path: string;
-  updated_modules: UpdatedModule[];
-}
-
-export interface UpdatedModule {
-  repo: string;
-  module: string;
-  previous_version: string;
-  updated_version: string;
-  next_breaking_version: NextBreakingVersion;
-  patches_applied: PatchesApplied;
-}
-
-export interface NextBreakingVersion {
-  version: string;
-  release_notes_url: string;
-}
-
-export interface PatchesApplied {
-  slugs: string[];
-  manual_scripts: string[];
-  count: number;
-}
 
 interface DownloadedBinary {
   folder: string;
@@ -96,13 +75,13 @@ function osPlatform() {
   }
 }
 
-// pullRequestBranch formats the branch name. When dependency and workingDir are provided, the branch format will be
+// pullRequestBranch formats the branch name. When prefix and dependency are provided, the branch format will be
 // patcher-dev-updates-gruntwork-io/terraform-aws-vpc/vpc-app`.
-function pullRequestBranch(dependency: string, workingDir: string): string {
+export function pullRequestBranch(prefix: string, dependency: string): string {
   let branch = "patcher";
 
-  if (workingDir) {
-    branch += `-${workingDir}`;
+  if (prefix) {
+    branch += `-${prefix}`;
   }
   branch += "-updates";
 
@@ -113,13 +92,13 @@ function pullRequestBranch(dependency: string, workingDir: string): string {
   return branch;
 }
 
-// pullRequestTitle formats the Pull Request title. When dependency and workingDir are provided, the title will be
+// pullRequestTitle formats the Pull Request title. When prefix and dependency are provided, the title will be
 // [Patcher] [dev] Update gruntwork-io/terraform-aws-vpc/vpc-app dependency
-function pullRequestTitle(dependency: string, workingDir: string): string {
+export function pullRequestTitle(prefix: string, dependency: string): string {
   let title = "[Patcher]";
 
-  if (workingDir) {
-    title += ` [${workingDir}]`;
+  if (prefix) {
+    title += ` [${prefix}]`;
   }
 
   if (dependency) {
@@ -129,86 +108,6 @@ function pullRequestTitle(dependency: string, workingDir: string): string {
   }
 
   return title;
-}
-
-function pullRequestReleaseNotesBreakingVersion(nextBreakingVersion: NextBreakingVersion): string {
-  if (nextBreakingVersion) {
-    return `([Release notes for ${nextBreakingVersion.version}](${nextBreakingVersion.release_notes_url}))`;
-  }
-
-  return "";
-}
-
-function pullRequestPatchesApplied(patchesApplied: PatchesApplied): string {
-  if (patchesApplied) {
-    return `- Patches applied: ${patchesApplied.count}`;
-  }
-
-  return "";
-}
-
-function pullRequestBodyUpdatedModules(modules: UpdatedModule[]): string {
-  return modules
-    .map(
-      (module) => `  - Previous version: \`${module.previous_version}\`
-  - Updated version: \`${module.updated_version}\` ${pullRequestReleaseNotesBreakingVersion(
-    module.next_breaking_version
-  )}
-  ${pullRequestPatchesApplied(module.patches_applied)}`
-    )
-    .join("\n");
-}
-
-function pullRequestBodySuccessfulUpdates(updatedModules: SuccessfulUpdate[]): string {
-  if (updatedModules && updatedModules.length > 0) {
-    return updatedModules
-      .map(
-        (module) => `- \`${module.file_path}\`
-${pullRequestBodyUpdatedModules(module.updated_modules)}`
-      )
-      .join("\n");
-  }
-
-  return "";
-}
-
-function pullRequestBodyReadmeToUpdate(manualSteps: ManualStepsYouMustFollow[]): string {
-  if (manualSteps && manualSteps.length > 0) {
-    return `\n1. Follow the instructions outlined in the \`README-TO-COMPLETE-UPDATE.md\` file and delete it once the update is complete.`;
-  }
-
-  return "";
-}
-
-export function pullRequestBody(patcherRawOutput: string, dependency: string): string {
-  const updateSummary = yaml.parse(patcherRawOutput) as PatcherUpdateSummary;
-
-  return `:robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
-
-## Description
-
-Updated the \`${dependency}\` dependency.
-
-### Updated files
-
-${pullRequestBodySuccessfulUpdates(updateSummary.successful_updates)}
-
-<details>
-  <summary>Raw output from \`patcher update\`</summary>
-
-  \`\`\`yaml
-${patcherRawOutput}
-  \`\`\`
-
-</details>
-
-## Steps to review
-
-1. Check the proposed changes to the \`terraform\` and/or \`terragrunt\` configuration files.${pullRequestBodyReadmeToUpdate(
-    updateSummary.manual_steps_you_must_follow
-  )}
-1. Validate the changes in the infrastructure by running \`terraform/terragrunt plan\`.
-1. Upon approval, proceed with deploying the infrastructure changes.`;
 }
 
 async function wasCodeUpdated() {
@@ -237,34 +136,6 @@ async function commitAndPushChanges(gitCommiter: GitCommitter, dependency: strin
 
   // Push changes to head branch
   await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`]);
-}
-
-async function openPullRequest(
-  octokit: GitHub,
-  gitCommiter: GitCommitter,
-  patcherRawOutput: string,
-  dependency: string,
-  workingDir: string
-) {
-  const { repo } = github.context;
-
-  const head = pullRequestBranch(dependency, workingDir);
-  const title = pullRequestTitle(dependency, workingDir);
-  const body = pullRequestBody(patcherRawOutput, dependency);
-
-  const repoDetails = await octokit.rest.repos.get({ ...repo });
-  const base = repoDetails.data.default_branch;
-  core.debug(`Base branch is ${base}. Opening the PR against it.`);
-
-  try {
-    await octokit.rest.pulls.create({ ...repo, title, head, base, body });
-  } catch (error: any) {
-    if (error.message?.includes(`A pull request already exists for`)) {
-      core.error(`A pull request for ${head} already exists. The branch was updated.`);
-    } else {
-      throw error;
-    }
-  }
 }
 
 function repoToBinaryMap(repo: string): string {
@@ -376,8 +247,34 @@ function isPatcherCommandValid(command: string): boolean {
   return VALID_COMMANDS.includes(command);
 }
 
-function updateArgs(updateStrategy: string, dependency: string, workingDir: string): string[] {
-  let args = ["update", NO_COLOR_FLAG, NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
+// // go run . report --output-spec-only --include-dirs "{*dev*}/**" test/fixtures/report/infrastructure-live-cis-large | jq "."
+function reportArgs(specFile: string, includeDirs: string, excludeDirs: string, workingDir: string): string[] {
+  let args = ["report", NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
+
+  if (specFile !== "") {
+    args = args.concat(`${OUTPUT_SPEC_FLAG}=${specFile}`);
+  }
+
+  if (includeDirs !== "") {
+    args = args.concat(`${INCLUDE_DIRS_FLAG}=${includeDirs}`);
+  }
+
+  if (excludeDirs !== "") {
+    args = args.concat(`${EXCLUDE_DIRS_FLAG}=${excludeDirs}`);
+  }
+
+  return args.concat([workingDir]);
+}
+
+function updateArgs(
+  specFile: string,
+  updateStrategy: string,
+  prBranch: string,
+  prTitle: string,
+  dependency: string,
+  workingDir: string
+): string[] {
+  let args = ["update", NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
 
   // If updateStrategy or dependency are not empty, assign them with the appropriate flag.
   // If they are invalid, Patcher will return an error, which will cause the Action to fail.
@@ -385,9 +282,25 @@ function updateArgs(updateStrategy: string, dependency: string, workingDir: stri
     args = args.concat(`${UPDATE_STRATEGY_FLAG}=${updateStrategy}`);
   }
 
-  // If a dependency is provided, set the `target` flag so Patcher can limit the update to a single dependency.
+  // If a spec file is provided, set the `--spec-file` flag so Patcher can use a custom upgrade spec.
+  if (specFile !== "") {
+    args = args.concat(`${SPEC_FILE_FLAG}=${specFile}`);
+  }
+
+  // If a dependency is provided, set the `--spec-target` flag so Patcher can limit the update to a single dependency.
   if (dependency !== "") {
-    args = args.concat(`${TARGET_FLAG}=${dependency}`);
+    args = args.concat(`${SPEC_TARGET_FLAG}=${dependency}`);
+  }
+
+  // Ensure a pull request is published
+  args = args.concat(PUBLISH_FLAG);
+
+  if (prBranch !== "") {
+    args = args.concat(`${PR_BRANCH_FLAG}=${prBranch}`);
+  }
+
+  if (prTitle !== "") {
+    args = args.concat(`${PR_TITLE_FLAG}=${prTitle}`);
   }
 
   return args.concat([workingDir]);
@@ -400,6 +313,7 @@ function getPatcherEnvVars(token: string): { [key: string]: string } {
     ...process.env,
     GITHUB_OAUTH_TOKEN: token,
     PATCHER_TELEMETRY_ID: telemetryId,
+    // TODO - Git AuthorName and Git Email are required for GitHub actions patcher to open PRs
   };
 }
 
@@ -407,14 +321,18 @@ async function runPatcher(
   octokit: GitHub,
   gitCommiter: GitCommitter,
   command: string,
-  { updateStrategy, dependency, workingDir, token }: PatcherCliArgs
+  { specFile, includeDirs, excludeDirs, updateStrategy, envTag, dependency, workingDir, token }: PatcherCliArgs
 ): Promise<void> {
   switch (command) {
     case REPORT_COMMAND: {
       core.startGroup("Running 'patcher report'");
-      const reportOutput = await exec.getExecOutput("patcher", [command, NON_INTERACTIVE_FLAG, workingDir], {
-        env: getPatcherEnvVars(token),
-      });
+      const reportOutput = await exec.getExecOutput(
+        "patcher",
+        reportArgs(specFile, includeDirs, excludeDirs, workingDir),
+        {
+          env: getPatcherEnvVars(token),
+        }
+      );
       core.endGroup();
 
       core.startGroup("Setting 'dependencies' output");
@@ -425,22 +343,22 @@ async function runPatcher(
     }
     default: {
       core.startGroup("Running 'patcher update'");
-      const updateOutput = await exec.getExecOutput("patcher", updateArgs(updateStrategy, dependency, workingDir), {
-        env: getPatcherEnvVars(token),
-      });
+
+      const prBranch = pullRequestBranch(envTag, dependency);
+      const prTitle = pullRequestTitle(envTag, dependency);
+
+      const updateOutput = await exec.getExecOutput(
+        "patcher",
+        updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir),
+        {
+          env: getPatcherEnvVars(token),
+        }
+      );
       core.endGroup();
 
-      if (await wasCodeUpdated()) {
-        core.startGroup("Commit and push changes");
-        await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
-        core.endGroup();
-
-        core.startGroup("Opening pull request");
-        await openPullRequest(octokit, gitCommiter, updateOutput.stdout, dependency, workingDir);
-        core.endGroup();
-      } else {
-        core.info(`No changes in ${dependency} after running Patcher. No further action is necessary.`);
-      }
+      core.startGroup("Setting 'updateResult' output");
+      core.setOutput("updateResult", updateOutput.stdout);
+      core.endGroup();
 
       return;
     }
@@ -489,6 +407,10 @@ export async function run() {
   const dependency = core.getInput("dependency");
   const workingDir = core.getInput("working_dir");
   const commitAuthor = core.getInput("commit_author");
+  const specFile = core.getInput("spec_file");
+  const includeDirs = core.getInput("include_dirs");
+  const excludeDirs = core.getInput("exclude_dirs");
+  const envTag = core.getInput("env_tag");
 
   // Always mask the `token` string in the logs.
   core.setSecret(token);
@@ -511,7 +433,11 @@ export async function run() {
   core.endGroup();
 
   await runPatcher(octokit, gitCommiter, command, {
+    specFile,
+    includeDirs,
+    excludeDirs,
     updateStrategy,
+    envTag,
     dependency,
     workingDir,
     token,
