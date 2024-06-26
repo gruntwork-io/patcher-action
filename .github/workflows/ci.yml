@@ -19,6 +19,7 @@ jobs:
         run: yarn
       - name: Run tests
         run: yarn test
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -31,6 +32,7 @@ jobs:
         run: yarn
       - name: Run tests
         run: yarn lint
+
   check-dist:
     runs-on: ubuntu-latest
     steps:
@@ -50,3 +52,17 @@ jobs:
             git diff
             exit 1
           fi
+
+  # TODO - upload file
+  patcher-report:
+    runs-on: ubuntu-latest
+    outputs:
+      dependencies: ${{ steps.run-report.outputs.dependencies }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patcher
+        id: run-report
+        uses: ./
+        with:
+          patcher_command: report
+          working_dir: infrastructure-live
