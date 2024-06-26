@@ -43,6 +43,9 @@ inputs:
   env_tag:
     description: "The environment tag to use when creating branches and pull requests. Defaults to 'dev'."
     default: "dev"
+  no_color:
+    description: "Disable color output. Defaults to false."
+    default: "false"
 
 outputs:
   dependencies:

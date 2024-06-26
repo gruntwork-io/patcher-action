@@ -1,5 +1,4 @@
 import * as os from "os";
-import * as yaml from "yaml";
 import * as path from "path";
 
 import * as github from "@actions/github";
@@ -52,6 +51,7 @@ type PatcherCliArgs = {
   dependency: string;
   workingDir: string;
   token: string;
+  noColor: boolean;
 };
 
 type GitCommitter = {
@@ -110,33 +110,29 @@ export function pullRequestTitle(prefix: string, dependency: string): string {
   return title;
 }
 
-async function wasCodeUpdated() {
-  const output = await exec.getExecOutput("git", ["status", "--porcelain"]);
-  // If there are changes, they will appear in the stdout. Otherwise, it returns blank.
-  return !!output.stdout;
-}
+// TODO - Patcher might need to configure the remote origin, if its not set by the checkout.
 
-async function commitAndPushChanges(gitCommiter: GitCommitter, dependency: string, workingDir: string, token: string) {
-  const { owner, repo } = github.context.repo;
-  const head = pullRequestBranch(dependency, workingDir);
+// async function commitAndPushChanges(gitCommiter: GitCommitter, dependency: string, workingDir: string, token: string) {
+//   const { owner, repo } = github.context.repo;
+//   const head = pullRequestBranch(dependency, workingDir);
 
-  // Setup https auth and https remote url
-  await exec.exec("git", ["remote", "set-url", "origin", `https://${token}@github.com/${owner}/${repo}.git`]);
+//   // Setup https auth and https remote url
+//   await exec.exec("git", ["remote", "set-url", "origin", `https://${token}@github.com/${owner}/${repo}.git`]);
 
-  // Setup committer name and email
-  await exec.exec("git", ["config", "user.name", gitCommiter.name]);
-  await exec.exec("git", ["config", "user.email", gitCommiter.email]);
+//   // Setup committer name and email
+//   await exec.exec("git", ["config", "user.name", gitCommiter.name]);
+//   await exec.exec("git", ["config", "user.email", gitCommiter.email]);
 
-  // Checkout to new branch and commit
-  await exec.exec("git", ["checkout", "-b", head]);
-  await exec.exec("git", ["add", "."]);
+//   // Checkout to new branch and commit
+//   await exec.exec("git", ["checkout", "-b", head]);
+//   await exec.exec("git", ["add", "."]);
 
-  const commitMessage = "Update dependencies using Patcher by Gruntwork";
-  await exec.exec("git", ["commit", "-m", commitMessage]);
+//   const commitMessage = "Update dependencies using Patcher by Gruntwork";
+//   await exec.exec("git", ["commit", "-m", commitMessage]);
 
-  // Push changes to head branch
-  await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`]);
-}
+//   // Push changes to head branch
+//   await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`]);
+// }
 
 function repoToBinaryMap(repo: string): string {
   switch (repo) {
@@ -248,7 +244,13 @@ function isPatcherCommandValid(command: string): boolean {
 }
 
 // // go run . report --output-spec-only --include-dirs "{*dev*}/**" test/fixtures/report/infrastructure-live-cis-large | jq "."
-function reportArgs(specFile: string, includeDirs: string, excludeDirs: string, workingDir: string): string[] {
+function reportArgs(
+  specFile: string,
+  includeDirs: string,
+  excludeDirs: string,
+  workingDir: string,
+  noColor: boolean
+): string[] {
   let args = ["report", NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
 
   if (specFile !== "") {
@@ -263,6 +265,10 @@ function reportArgs(specFile: string, includeDirs: string, excludeDirs: string, 
     args = args.concat(`${EXCLUDE_DIRS_FLAG}=${excludeDirs}`);
   }
 
+  if (noColor) {
+    args = args.concat(NO_COLOR_FLAG);
+  }
+
   return args.concat([workingDir]);
 }
 
@@ -272,7 +278,8 @@ function updateArgs(
   prBranch: string,
   prTitle: string,
   dependency: string,
-  workingDir: string
+  workingDir: string,
+  noColor: boolean
 ): string[] {
   let args = ["update", NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
 
@@ -303,6 +310,10 @@ function updateArgs(
     args = args.concat(`${PR_TITLE_FLAG}=${prTitle}`);
   }
 
+  if (noColor) {
+    args = args.concat(NO_COLOR_FLAG);
+  }
+
   return args.concat([workingDir]);
 }
 
@@ -318,17 +329,16 @@ function getPatcherEnvVars(token: string): { [key: string]: string } {
 }
 
 async function runPatcher(
-  octokit: GitHub,
   gitCommiter: GitCommitter,
   command: string,
-  { specFile, includeDirs, excludeDirs, updateStrategy, envTag, dependency, workingDir, token }: PatcherCliArgs
+  { specFile, includeDirs, excludeDirs, updateStrategy, envTag, dependency, workingDir, token, noColor }: PatcherCliArgs
 ): Promise<void> {
   switch (command) {
     case REPORT_COMMAND: {
       core.startGroup("Running 'patcher report'");
       const reportOutput = await exec.getExecOutput(
         "patcher",
-        reportArgs(specFile, includeDirs, excludeDirs, workingDir),
+        reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
           env: getPatcherEnvVars(token),
         }
@@ -349,7 +359,7 @@ async function runPatcher(
 
       const updateOutput = await exec.getExecOutput(
         "patcher",
-        updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir),
+        updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, noColor),
         {
           env: getPatcherEnvVars(token),
         }
@@ -411,6 +421,7 @@ export async function run() {
   const includeDirs = core.getInput("include_dirs");
   const excludeDirs = core.getInput("exclude_dirs");
   const envTag = core.getInput("env_tag");
+  const noColor = core.getBooleanInput("no_color");
 
   // Always mask the `token` string in the logs.
   core.setSecret(token);
@@ -432,7 +443,7 @@ export async function run() {
   await downloadAndSetupTooling(octokit, token);
   core.endGroup();
 
-  await runPatcher(octokit, gitCommiter, command, {
+  await runPatcher(gitCommiter, command, {
     specFile,
     includeDirs,
     excludeDirs,
@@ -441,5 +452,6 @@ export async function run() {
     dependency,
     workingDir,
     token,
+    noColor,
   });
 }
