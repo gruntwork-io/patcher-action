@@ -66,3 +66,29 @@ jobs:
         with:
           patcher_command: report
           working_dir: infrastructure-live
+# TODO - ideally run patcher upgrade with a dry-run (if thats possible?)
+# - updates that would be performed
+# - patches applied
+# - PR would be opened
+# jobs:
+#   job1:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Create a file
+#         run: echo "Hello World" > file.txt
+#       - name: Upload file
+#         uses: actions/upload-artifact@v3
+#         with:
+#           name: my-file
+#           path: file.txt
+
+#   job2:
+#     needs: job1
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Download file
+#         uses: actions/download-artifact@v3
+#         with:
+#           name: my-file
+#       - name: Use the file
+#         run: cat file.txt
