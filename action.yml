@@ -43,6 +43,9 @@ inputs:
   env_tag:
     description: "The environment tag to use when creating branches and pull requests. Defaults to 'dev'."
     default: "dev"
+  dry_run:
+    description: "Simulate all operations using dry-run mode. Useful for test workflows. Defaults to false."
+    default: "false"
   no_color:
     description: "Disable color output. Defaults to false."
     default: "false"

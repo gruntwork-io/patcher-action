@@ -26,6 +26,7 @@ const UPDATE_COMMAND = "update";
 const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
 
 const NON_INTERACTIVE_FLAG = "--non-interactive";
+const DRY_RUN_FLAG = "--dry-run";
 const NO_COLOR_FLAG = "--no-color";
 const INCLUDE_DIRS_FLAG = "--include-dirs";
 const EXCLUDE_DIRS_FLAG = "--exclude-dirs";
@@ -51,6 +52,7 @@ type PatcherCliArgs = {
   dependency: string;
   workingDir: string;
   token: string;
+  dryRun: boolean;
   noColor: boolean;
 };
 
@@ -243,7 +245,6 @@ function isPatcherCommandValid(command: string): boolean {
   return VALID_COMMANDS.includes(command);
 }
 
-// // go run . report --output-spec-only --include-dirs "{*dev*}/**" test/fixtures/report/infrastructure-live-cis-large | jq "."
 function reportArgs(
   specFile: string,
   includeDirs: string,
@@ -279,6 +280,7 @@ function updateArgs(
   prTitle: string,
   dependency: string,
   workingDir: string,
+  dryRun: boolean,
   noColor: boolean
 ): string[] {
   let args = ["update", NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
@@ -310,6 +312,10 @@ function updateArgs(
     args = args.concat(`${PR_TITLE_FLAG}=${prTitle}`);
   }
 
+  if (dryRun) {
+    args = args.concat(DRY_RUN_FLAG);
+  }
+
   if (noColor) {
     args = args.concat(NO_COLOR_FLAG);
   }
@@ -331,7 +337,18 @@ function getPatcherEnvVars(token: string): { [key: string]: string } {
 async function runPatcher(
   gitCommiter: GitCommitter,
   command: string,
-  { specFile, includeDirs, excludeDirs, updateStrategy, envTag, dependency, workingDir, token, noColor }: PatcherCliArgs
+  {
+    specFile,
+    includeDirs,
+    excludeDirs,
+    updateStrategy,
+    envTag,
+    dependency,
+    workingDir,
+    token,
+    dryRun,
+    noColor,
+  }: PatcherCliArgs
 ): Promise<void> {
   switch (command) {
     case REPORT_COMMAND: {
@@ -359,7 +376,7 @@ async function runPatcher(
 
       const updateOutput = await exec.getExecOutput(
         "patcher",
-        updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, noColor),
+        updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
           env: getPatcherEnvVars(token),
         }
@@ -421,6 +438,7 @@ export async function run() {
   const includeDirs = core.getInput("include_dirs");
   const excludeDirs = core.getInput("exclude_dirs");
   const envTag = core.getInput("env_tag");
+  const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
 
   // Always mask the `token` string in the logs.
@@ -452,6 +470,7 @@ export async function run() {
     dependency,
     workingDir,
     token,
+    dryRun,
     noColor,
   });
 }

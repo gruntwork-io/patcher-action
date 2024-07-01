@@ -13547,6 +13547,7 @@ const REPORT_COMMAND = "report";
 const UPDATE_COMMAND = "update";
 const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
 const NON_INTERACTIVE_FLAG = "--non-interactive";
+const DRY_RUN_FLAG = "--dry-run";
 const NO_COLOR_FLAG = "--no-color";
 const INCLUDE_DIRS_FLAG = "--include-dirs";
 const EXCLUDE_DIRS_FLAG = "--exclude-dirs";
@@ -13692,7 +13693,6 @@ async function downloadAndSetupTooling(octokit, token) {
 function isPatcherCommandValid(command) {
     return VALID_COMMANDS.includes(command);
 }
-// // go run . report --output-spec-only --include-dirs "{*dev*}/**" test/fixtures/report/infrastructure-live-cis-large | jq "."
 function reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor) {
     let args = ["report", NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
     if (specFile !== "") {
@@ -13709,7 +13709,7 @@ function reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor) {
     }
     return args.concat([workingDir]);
 }
-function updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, noColor) {
+function updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor) {
     let args = ["update", NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
     // If updateStrategy or dependency are not empty, assign them with the appropriate flag.
     // If they are invalid, Patcher will return an error, which will cause the Action to fail.
@@ -13732,6 +13732,9 @@ function updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, wor
     if (prTitle !== "") {
         args = args.concat(`${PR_TITLE_FLAG}=${prTitle}`);
     }
+    if (dryRun) {
+        args = args.concat(DRY_RUN_FLAG);
+    }
     if (noColor) {
         args = args.concat(NO_COLOR_FLAG);
     }
@@ -13746,7 +13749,7 @@ function getPatcherEnvVars(token) {
         // TODO - Git AuthorName and Git Email are required for GitHub actions patcher to open PRs
     };
 }
-async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, envTag, dependency, workingDir, token, noColor }) {
+async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, envTag, dependency, workingDir, token, dryRun, noColor, }) {
     switch (command) {
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
@@ -13763,7 +13766,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             core.startGroup("Running 'patcher update'");
             const prBranch = pullRequestBranch(envTag, dependency);
             const prTitle = pullRequestTitle(envTag, dependency);
-            const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, noColor), {
+            const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor), {
                 env: getPatcherEnvVars(token),
             });
             core.endGroup();
@@ -13813,6 +13816,7 @@ async function run() {
     const includeDirs = core.getInput("include_dirs");
     const excludeDirs = core.getInput("exclude_dirs");
     const envTag = core.getInput("env_tag");
+    const dryRun = core.getBooleanInput("dry_run");
     const noColor = core.getBooleanInput("no_color");
     // Always mask the `token` string in the logs.
     core.setSecret(token);
@@ -13838,6 +13842,7 @@ async function run() {
         dependency,
         workingDir,
         token,
+        dryRun,
         noColor,
     });
 }
