@@ -16,6 +16,7 @@ jobs:
         id: run-report
         uses: ./
         with:
+          github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
           patcher_command: report
           working_dir: infrastructure-live
 
@@ -31,5 +32,6 @@ jobs:
         uses: ./
         with:
           patcher_command: update
+          github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
           dependency: ${{ matrix.dependency }}
           working_dir: infrastructure-live
