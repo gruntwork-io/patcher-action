@@ -53,7 +53,6 @@ jobs:
             exit 1
           fi
 
-  # TODO - upload file
   patcher-report:
     runs-on: ubuntu-latest
     outputs:
@@ -66,6 +65,12 @@ jobs:
         with:
           patcher_command: report
           working_dir: infrastructure-live
+          spec_file: spec.json
+          include_dirs: "{*dev*}/**"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spec-file
+          path: spec.json
 # TODO - ideally run patcher upgrade with a dry-run (if thats possible?)
 # - updates that would be performed
 # - patches applied
