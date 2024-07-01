@@ -63,6 +63,7 @@ jobs:
         id: run-report
         uses: ./
         with:
+          github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
           patcher_command: report
           working_dir: infrastructure-live
           spec_file: spec.json
