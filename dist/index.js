@@ -13525,7 +13525,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.run = exports.pullRequestTitle = exports.pullRequestBranch = void 0;
+exports.run = void 0;
 const os = __importStar(__nccwpck_require__(2037));
 const path = __importStar(__nccwpck_require__(1017));
 const github = __importStar(__nccwpck_require__(5438));
@@ -13569,36 +13569,6 @@ function osPlatform() {
             throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
     }
 }
-// pullRequestBranch formats the branch name. When prefix and dependency are provided, the branch format will be
-// patcher-dev-updates-gruntwork-io/terraform-aws-vpc/vpc-app`.
-function pullRequestBranch(prefix, dependency) {
-    let branch = "patcher";
-    if (prefix) {
-        branch += `-${prefix}`;
-    }
-    branch += "-updates";
-    if (dependency) {
-        branch += `-${dependency}`;
-    }
-    return branch;
-}
-exports.pullRequestBranch = pullRequestBranch;
-// pullRequestTitle formats the Pull Request title. When prefix and dependency are provided, the title will be
-// [Patcher] [dev] Update gruntwork-io/terraform-aws-vpc/vpc-app dependency
-function pullRequestTitle(prefix, dependency) {
-    let title = "[Patcher]";
-    if (prefix) {
-        title += ` [${prefix}]`;
-    }
-    if (dependency) {
-        title += ` Update ${dependency} dependency`;
-    }
-    else {
-        title += " Update dependencies";
-    }
-    return title;
-}
-exports.pullRequestTitle = pullRequestTitle;
 // TODO - Patcher might need to configure the remote origin, if its not set by the checkout.
 // async function commitAndPushChanges(gitCommiter: GitCommitter, dependency: string, workingDir: string, token: string) {
 //   const { owner, repo } = github.context.repo;
@@ -13749,7 +13719,7 @@ function getPatcherEnvVars(token) {
         // TODO - Git AuthorName and Git Email are required for GitHub actions patcher to open PRs
     };
 }
-async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, envTag, dependency, workingDir, token, dryRun, noColor, }) {
+async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, token, dryRun, noColor, }) {
     switch (command) {
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
@@ -13763,9 +13733,13 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             return;
         }
         default: {
+            core.startGroup("Validating `patcher update` args");
+            if (prBranch !== "") {
+                core.setFailed("The pull request branch must be specified when running 'update'");
+                return;
+            }
+            core.endGroup();
             core.startGroup("Running 'patcher update'");
-            const prBranch = pullRequestBranch(envTag, dependency);
-            const prTitle = pullRequestTitle(envTag, dependency);
             const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor), {
                 env: getPatcherEnvVars(token),
             });
@@ -13815,7 +13789,8 @@ async function run() {
     const specFile = core.getInput("spec_file");
     const includeDirs = core.getInput("include_dirs");
     const excludeDirs = core.getInput("exclude_dirs");
-    const envTag = core.getInput("env_tag");
+    const prBranch = core.getInput("pull_request_branch");
+    const prTitle = core.getInput("pull_request_title");
     const dryRun = core.getBooleanInput("dry_run");
     const noColor = core.getBooleanInput("no_color");
     // Always mask the `token` string in the logs.
@@ -13838,7 +13813,8 @@ async function run() {
         includeDirs,
         excludeDirs,
         updateStrategy,
-        envTag,
+        prBranch,
+        prTitle,
         dependency,
         workingDir,
         token,

@@ -40,9 +40,12 @@ inputs:
       "Author of the Pull Request's commits in the format 'Name <name@email.com>'. The permissions to push the changes
       "and to create the Pull Request are from 'github_token'. Defaults to gruntwork-patcher-bot."
     default: "gruntwork-patcher-bot <patcher@gruntwork.io>"
-  env_tag:
-    description: "The environment tag to use when creating branches and pull requests. Defaults to 'dev'."
-    default: "dev"
+  pull_request_branch:
+    description: "Branch where the Pull Request should be created. Required when 'update' is used."
+    default: ""
+  pull_request_title:
+    description: "Title of the Pull Request. Defaults to '[Patcher] Update dependencies'."
+    default: "[Patcher] Update dependencies"
   dry_run:
     description: "Simulate all operations using dry-run mode. Useful for test workflows. Defaults to false."
     default: "false"

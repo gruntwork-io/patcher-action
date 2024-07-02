@@ -48,7 +48,8 @@ type PatcherCliArgs = {
   includeDirs: string;
   excludeDirs: string;
   updateStrategy: string;
-  envTag: string;
+  prBranch: string;
+  prTitle: string;
   dependency: string;
   workingDir: string;
   token: string;
@@ -75,41 +76,6 @@ function osPlatform() {
     default:
       throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
   }
-}
-
-// pullRequestBranch formats the branch name. When prefix and dependency are provided, the branch format will be
-// patcher-dev-updates-gruntwork-io/terraform-aws-vpc/vpc-app`.
-export function pullRequestBranch(prefix: string, dependency: string): string {
-  let branch = "patcher";
-
-  if (prefix) {
-    branch += `-${prefix}`;
-  }
-  branch += "-updates";
-
-  if (dependency) {
-    branch += `-${dependency}`;
-  }
-
-  return branch;
-}
-
-// pullRequestTitle formats the Pull Request title. When prefix and dependency are provided, the title will be
-// [Patcher] [dev] Update gruntwork-io/terraform-aws-vpc/vpc-app dependency
-export function pullRequestTitle(prefix: string, dependency: string): string {
-  let title = "[Patcher]";
-
-  if (prefix) {
-    title += ` [${prefix}]`;
-  }
-
-  if (dependency) {
-    title += ` Update ${dependency} dependency`;
-  } else {
-    title += " Update dependencies";
-  }
-
-  return title;
 }
 
 // TODO - Patcher might need to configure the remote origin, if its not set by the checkout.
@@ -342,7 +308,8 @@ async function runPatcher(
     includeDirs,
     excludeDirs,
     updateStrategy,
-    envTag,
+    prBranch,
+    prTitle,
     dependency,
     workingDir,
     token,
@@ -369,11 +336,14 @@ async function runPatcher(
       return;
     }
     default: {
+      core.startGroup("Validating `patcher update` args");
+      if (prBranch !== "") {
+        core.setFailed("The pull request branch must be specified when running 'update'");
+        return;
+      }
+      core.endGroup();
+
       core.startGroup("Running 'patcher update'");
-
-      const prBranch = pullRequestBranch(envTag, dependency);
-      const prTitle = pullRequestTitle(envTag, dependency);
-
       const updateOutput = await exec.getExecOutput(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
@@ -437,7 +407,8 @@ export async function run() {
   const specFile = core.getInput("spec_file");
   const includeDirs = core.getInput("include_dirs");
   const excludeDirs = core.getInput("exclude_dirs");
-  const envTag = core.getInput("env_tag");
+  const prBranch = core.getInput("pull_request_branch");
+  const prTitle = core.getInput("pull_request_title");
   const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
 
@@ -466,7 +437,8 @@ export async function run() {
     includeDirs,
     excludeDirs,
     updateStrategy,
-    envTag,
+    prBranch,
+    prTitle,
     dependency,
     workingDir,
     token,
