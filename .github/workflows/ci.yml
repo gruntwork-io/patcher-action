@@ -76,7 +76,7 @@ jobs:
         with:
           name: spec-file
       - name: Patcher
-        id: run-report
+        id: run-update
         uses: ./
         with:
           github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}

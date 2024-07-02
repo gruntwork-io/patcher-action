@@ -78,30 +78,6 @@ function osPlatform() {
   }
 }
 
-// TODO - Patcher might need to configure the remote origin, if its not set by the checkout.
-
-// async function commitAndPushChanges(gitCommiter: GitCommitter, dependency: string, workingDir: string, token: string) {
-//   const { owner, repo } = github.context.repo;
-//   const head = pullRequestBranch(dependency, workingDir);
-
-//   // Setup https auth and https remote url
-//   await exec.exec("git", ["remote", "set-url", "origin", `https://${token}@github.com/${owner}/${repo}.git`]);
-
-//   // Setup committer name and email
-//   await exec.exec("git", ["config", "user.name", gitCommiter.name]);
-//   await exec.exec("git", ["config", "user.email", gitCommiter.email]);
-
-//   // Checkout to new branch and commit
-//   await exec.exec("git", ["checkout", "-b", head]);
-//   await exec.exec("git", ["add", "."]);
-
-//   const commitMessage = "Update dependencies using Patcher by Gruntwork";
-//   await exec.exec("git", ["commit", "-m", commitMessage]);
-
-//   // Push changes to head branch
-//   await exec.exec("git", ["push", "--force", "origin", `${head}:refs/heads/${head}`]);
-// }
-
 function repoToBinaryMap(repo: string): string {
   switch (repo) {
     case "patcher-cli":
@@ -344,7 +320,11 @@ async function runPatcher(
       }
       core.endGroup();
 
-      core.startGroup("Running 'patcher update'");
+      let groupName = "Running 'patcher update'";
+      if (dryRun) {
+        groupName += " (dry run)";
+      }
+      core.startGroup(groupName);
       const updateOutput = await exec.getExecOutput(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
