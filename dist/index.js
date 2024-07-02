@@ -13727,8 +13727,8 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
                 env: getPatcherEnvVars(token),
             });
             core.endGroup();
-            core.startGroup("Setting 'dependencies' output");
-            core.setOutput("dependencies", reportOutput.stdout);
+            core.startGroup("Setting upgrade spec output");
+            core.setOutput("spec", reportOutput.stdout);
             core.endGroup();
             return;
         }

@@ -43,7 +43,7 @@ jobs:
   patcher-report-dev:
     runs-on: ubuntu-latest
     outputs:
-      spec: ${{ steps.read-spec-json.outputs.spec }}
+      spec: ${{ steps.run-report.outputs.spec }}
     steps:
       - uses: actions/checkout@v4
       - name: Patcher
@@ -55,16 +55,16 @@ jobs:
           working_dir: infrastructure-live
           spec_file: spec.json
           include_dirs: "{*dev*}/**"
-      - name: Read spec file
-        id: read-spec-json
-        run: |
-          content=$(cat spec.json)
-          echo "Spec File Contents"
-          cat spec.json | jq "."
-          # This syntax preserves newlines and special characters
-          echo "spec<<EOF" >> $GITHUB_OUTPUT
-          echo "$spec" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+      # - name: Read spec file
+      #   id: read-spec-json
+      #   run: |
+      #     content=$(cat spec.json)
+      #     echo "Spec File Contents"
+      #     cat spec.json | jq "."
+      #     # This syntax preserves newlines and special characters
+      #     echo "spec<<EOF" >> $GITHUB_OUTPUT
+      #     echo "$spec" >> $GITHUB_OUTPUT
+      #     echo "EOF" >> $GITHUB_OUTPUT
       - uses: actions/upload-artifact@v4
         with:
           name: spec-file

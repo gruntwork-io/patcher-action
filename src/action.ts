@@ -329,8 +329,8 @@ async function runPatcher(
       );
       core.endGroup();
 
-      core.startGroup("Setting 'dependencies' output");
-      core.setOutput("dependencies", reportOutput.stdout);
+      core.startGroup("Setting upgrade spec output");
+      core.setOutput("spec", reportOutput.stdout);
       core.endGroup();
 
       return;
