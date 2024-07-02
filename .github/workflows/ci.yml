@@ -43,7 +43,7 @@ jobs:
   patcher-report-dev:
     runs-on: ubuntu-latest
     outputs:
-      spec: ${{ steps.run-report.outputs.spec }}
+      spec: ${{ steps.read-spec-json.outputs.spec }}
     steps:
       - uses: actions/checkout@v4
       - name: Patcher
