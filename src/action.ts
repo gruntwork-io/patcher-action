@@ -13,7 +13,7 @@ const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
 const PATCHER_VERSION = "v0.9.0";
 const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
-const TERRAPATCH_VERSION = "v0.1.5";
+const TERRAPATCH_VERSION = "v0.1.6";
 
 const HCLEDIT_ORG = "minamijoyo";
 const TFUPDATE_GITHUB_REPO = "tfupdate";
@@ -337,7 +337,7 @@ async function runPatcher(
     }
     default: {
       core.startGroup("Validating `patcher update` args");
-      if (prBranch !== "") {
+      if (prBranch === "") {
         core.setFailed("The pull request branch must be specified when running 'update'");
         return;
       }
