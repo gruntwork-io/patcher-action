@@ -55,16 +55,6 @@ jobs:
           working_dir: infrastructure-live
           spec_file: spec.json
           include_dirs: "{*dev*}/**"
-      # - name: Read spec file
-      #   id: read-spec-json
-      #   run: |
-      #     content=$(cat spec.json)
-      #     echo "Spec File Contents"
-      #     cat spec.json | jq "."
-      #     # This syntax preserves newlines and special characters
-      #     echo "spec<<EOF" >> $GITHUB_OUTPUT
-      #     echo "$spec" >> $GITHUB_OUTPUT
-      #     echo "EOF" >> $GITHUB_OUTPUT
       - uses: actions/upload-artifact@v4
         with:
           name: spec-file

@@ -13710,13 +13710,14 @@ function updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, wor
     }
     return args.concat([workingDir]);
 }
-function getPatcherEnvVars(token) {
+function getPatcherEnvVars(gitCommiter, token) {
     const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
     return {
         ...process.env,
         GITHUB_OAUTH_TOKEN: token,
         PATCHER_TELEMETRY_ID: telemetryId,
-        // TODO - Git AuthorName and Git Email are required for GitHub actions patcher to open PRs
+        GIT_AUTHOR_NAME: gitCommiter.name,
+        GIT_AUTHOR_EMAIL: gitCommiter.email,
     };
 }
 async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, token, dryRun, noColor, }) {
@@ -13724,7 +13725,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
             const reportOutput = await exec.getExecOutput("patcher", reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor), {
-                env: getPatcherEnvVars(token),
+                env: getPatcherEnvVars(gitCommiter, token),
             });
             core.endGroup();
             core.startGroup("Setting upgrade spec output");
@@ -13741,7 +13742,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             core.endGroup();
             core.startGroup("Running 'patcher update'");
             const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor), {
-                env: getPatcherEnvVars(token),
+                env: getPatcherEnvVars(gitCommiter, token),
             });
             core.endGroup();
             core.startGroup("Setting 'updateResult' output");

@@ -289,14 +289,15 @@ function updateArgs(
   return args.concat([workingDir]);
 }
 
-function getPatcherEnvVars(token: string): { [key: string]: string } {
+function getPatcherEnvVars(gitCommiter: GitCommitter, token: string): { [key: string]: string } {
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
 
   return {
     ...process.env,
     GITHUB_OAUTH_TOKEN: token,
     PATCHER_TELEMETRY_ID: telemetryId,
-    // TODO - Git AuthorName and Git Email are required for GitHub actions patcher to open PRs
+    GIT_AUTHOR_NAME: gitCommiter.name,
+    GIT_AUTHOR_EMAIL: gitCommiter.email,
   };
 }
 
@@ -324,7 +325,7 @@ async function runPatcher(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
-          env: getPatcherEnvVars(token),
+          env: getPatcherEnvVars(gitCommiter, token),
         }
       );
       core.endGroup();
@@ -348,7 +349,7 @@ async function runPatcher(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
-          env: getPatcherEnvVars(token),
+          env: getPatcherEnvVars(gitCommiter, token),
         }
       );
       core.endGroup();
