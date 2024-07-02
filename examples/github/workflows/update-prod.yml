@@ -8,15 +8,53 @@ on:
 permissions:
   contents: write
 
-env:
-  ENV_FOLDER_NAME: prod
-
 jobs:
-  update-env:
-    if: github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch'
+  patcher-report:
+    if: github.event_name == 'repository_dispatch' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    outputs:
+      spec: ${{ steps.run-report.outputs.spec }}
     steps:
       - uses: actions/checkout@v4
-      - uses: gruntwork-io/patcher-action@v1
+      - uses: gruntwork-io/patcher-action@v2
+        id: run-report
         with:
-          working_dir: ${{ env.ENV_FOLDER_NAME }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          patcher_command: report
+          working_dir: ./
+          spec_file: spec.json
+          include_dirs: "{*prod*}/**"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spec-file
+          path: spec.json
+
+  update-env:
+    needs: [patcher-report]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include: ${{ fromJson(needs.patcher-report.outputs.spec).Dependencies }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create trigger source message
+        if: github.event_name == 'repository_dispatch'
+        id: trigger_event
+        run: |
+          echo "source=Triggered by a new release in \`dogfood-infrastructure-modules\`" >> "$GITHUB_OUTPUT"
+      - name: Load spec file
+        uses: actions/download-artifact@v4
+        with:
+          name: spec-file
+      - uses: gruntwork-io/patcher-action@v2
+        id: run-update
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          patcher_command: update
+          working_dir: ./
+          spec_file: spec.json
+          pull_request_title: "[Patcher] [prod] Update ${{ matrix.ID }}"
+          pull_request_branch: "patcher-prod-updates-${{ matrix.ID }}"
+          dependency: ${{ matrix.ID }}
