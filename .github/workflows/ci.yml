@@ -59,6 +59,8 @@ jobs:
         id: read-spec-json
         run: |
           content=$(cat spec.json)
+          echo "Spec File Contents"
+          cat spec.json | jq "."
           # This syntax preserves newlines and special characters
           echo "spec<<EOF" >> $GITHUB_OUTPUT
           echo "$spec" >> $GITHUB_OUTPUT
