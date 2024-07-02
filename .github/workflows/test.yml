@@ -9,7 +9,7 @@ jobs:
   patcher-report:
     runs-on: ubuntu-latest
     outputs:
-      dependencies: ${{ steps.run-report.outputs.dependencies }}
+      spec: ${{ steps.run-report.outputs.spec }}
     steps:
       - uses: actions/checkout@v4
       - name: Patcher
@@ -19,19 +19,35 @@ jobs:
           github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
           patcher_command: report
           working_dir: infrastructure-live
+          spec_file: spec.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spec-file
+          path: spec.json
 
   patcher-update:
+    # Runs patcher update against each dependency in the spec file
     needs: [patcher-report]
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
+      max-parallel: 2
       matrix:
-        dependency: ${{ fromJson(needs.patcher-report.outputs.dependencies) }}
+        include: ${{ fromJson(needs.patcher-report.outputs.spec).Dependencies }}
     steps:
       - uses: actions/checkout@v4
+      - name: Load spec file
+        uses: actions/download-artifact@v4
+        with:
+          name: spec-file
       - name: Patcher
+        id: run-update
         uses: ./
         with:
-          patcher_command: update
           github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
-          dependency: ${{ matrix.dependency }}
+          patcher_command: update
           working_dir: infrastructure-live
+          spec_file: spec.json
+          pull_request_title: "[Patcher] Update ${{ matrix.ID }}"
+          pull_request_branch: "patcher-updates-${{ matrix.ID }}"
+          dependency: ${{ matrix.ID }}
