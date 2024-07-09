@@ -20,19 +20,24 @@ The promotional workflow uses 5 GitHub Actions workflows:
     - If a human user leaves your GitHub org, the Patcher bot will remain in place.
     - Be sure to safely store the login credentials for this user. For example, at Gruntwork, credentials for GitHub Machine Users are stored in 1Password where they are shared with exactly the right people.
 
-- The environment folder name is set in the workflow file using the `ENV_FOLDER_NAME` environment variable.
+- Environment or account folder names can be set in the workflow file by using the `include_dirs` and `exclude_dirs` action inputs.
 
 For example:
 ```yaml
-  env:
-    ENV_FOLDER_NAME: prod
+  include_dirs: "{*dev*}/**"
 ```
+
+Will include only directories matching the given double-star glob pattern. This example would include directories named `dev`, `dev2`, `gruntwork-dev-account1` and so on.
 
 ### Common Jobs
 The 3 update dependencies workflows could be condensed into a single workflow file plus a config file but doing so makes the overall flow harder to follow and describe. So for clarity, we have kept them separate.
 
-####  update-env Job
-Each of the update workflows contains a `update-env` job. This is the job that runs Patcher and creates a PR for the changes.
+#### patcher-report Job
+
+The patcher report job is used to generate a report of the outdated dependencies discovered by Patcher. This report is saved as an upgrade specification (also known as a spec file) which is used in subsequent jobs to influence the upgrade process.
+
+#### update-env Job
+Each of the update workflows contains an `update-env` job. This is the job that runs Patcher and creates a PR for the changes.
 
 This job runs only if the workflow was:
 - Triggered by an event from another workflow signalling the start of a promotion (`github.event.name == 'repository_dispatch'`)
@@ -49,13 +54,14 @@ This job runs only if the workflow was triggered by the merging of a PR that has
 ## The Patcher Readme Check Workflow
 The *Patcher* workflow consists of a single job that is triggered when a PR is opened, reopened or modified.
 
-The `do-not-merge job` fails if any the branch being merged contains any `README-TO-COMPLETE-UPDATE.md` files.
+The `do-not-merge` job fails if any the branch being merged contains any `README-TO-COMPLETE-UPDATE.md` files.
 
 ## The Labeler Workflow
 The Labeler GitHub Actions workflow uses the [Pull Request Labeler](https://github.com/actions/labeler) GitHub Action to ensure the PR is correctly labelled.
 
 The action is configured in `.github/labeler.yml` :
 - Any changes to the `dev/` folder result in an `updates-dev` label being applied
+- Any changes to the `dev2/` folder result in an `updates-dev` label being applied
 - Any changes to the `stage/` folder result in an `updates-stage` label being applied
 - Any changes to the `prod/` folder result in an `updates-prod` label being applied
 - If the PR contains any `README-TO-COMPLETE-UPDATE.md` files the result is a `do-not-merge` label being applied

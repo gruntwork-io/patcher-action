@@ -1,5 +1,4 @@
 import * as os from "os";
-import * as yaml from "yaml";
 import * as path from "path";
 
 import * as github from "@actions/github";
@@ -12,9 +11,9 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
-const PATCHER_VERSION = "v0.8.4";
+const PATCHER_VERSION = "v0.9.0";
 const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
-const TERRAPATCH_VERSION = "v0.1.3";
+const TERRAPATCH_VERSION = "v0.1.6";
 
 const HCLEDIT_ORG = "minamijoyo";
 const TFUPDATE_GITHUB_REPO = "tfupdate";
@@ -27,58 +26,41 @@ const UPDATE_COMMAND = "update";
 const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
 
 const NON_INTERACTIVE_FLAG = "--non-interactive";
+const DRY_RUN_FLAG = "--dry-run";
 const NO_COLOR_FLAG = "--no-color";
+const INCLUDE_DIRS_FLAG = "--include-dirs";
+const EXCLUDE_DIRS_FLAG = "--exclude-dirs";
 const SKIP_CONTAINER_FLAG = "--skip-container-runtime";
 const UPDATE_STRATEGY_FLAG = "--update-strategy";
-const TARGET_FLAG = "--target";
+
+const OUTPUT_SPEC_FLAG = "--output-spec";
+const SPEC_FILE_FLAG = "--spec-file";
+const SPEC_TARGET_FLAG = "--spec-target";
+
+const PUBLISH_FLAG = "--publish";
+const PR_TITLE_FLAG = "--pr-title";
+const PR_BRANCH_FLAG = "--pr-branch";
 
 // Define types
 
 type PatcherCliArgs = {
+  specFile: string;
+  includeDirs: string;
+  excludeDirs: string;
   updateStrategy: string;
+  prBranch: string;
+  prTitle: string;
   dependency: string;
   workingDir: string;
   token: string;
+  dryRun: boolean;
+  noColor: boolean;
 };
 
 type GitCommitter = {
   name: string;
   email: string;
 };
-
-export interface PatcherUpdateSummary {
-  successful_updates: SuccessfulUpdate[];
-  manual_steps_you_must_follow: ManualStepsYouMustFollow[];
-}
-
-export interface ManualStepsYouMustFollow {
-  instructions_file_path: string;
-}
-
-export interface SuccessfulUpdate {
-  file_path: string;
-  updated_modules: UpdatedModule[];
-}
-
-export interface UpdatedModule {
-  repo: string;
-  module: string;
-  previous_version: string;
-  updated_version: string;
-  next_breaking_version: NextBreakingVersion;
-  patches_applied: PatchesApplied;
-}
-
-export interface NextBreakingVersion {
-  version: string;
-  release_notes_url: string;
-}
-
-export interface PatchesApplied {
-  slugs: string[];
-  manual_scripts: string[];
-  count: number;
-}
 
 interface DownloadedBinary {
   folder: string;
@@ -92,206 +74,7 @@ function osPlatform() {
     case "darwin":
       return platform;
     default:
-      throw new Error(
-        "Unsupported operating system - the Patcher action is only released for Darwin and Linux",
-      );
-  }
-}
-
-// pullRequestBranch formats the branch name. When dependency and workingDir are provided, the branch format will be
-// patcher-dev-updates-gruntwork-io/terraform-aws-vpc/vpc-app`.
-function pullRequestBranch(dependency: string, workingDir: string): string {
-  let branch = "patcher";
-
-  if (workingDir) {
-    branch += `-${workingDir}`;
-  }
-  branch += "-updates";
-
-  if (dependency) {
-    branch += `-${dependency}`;
-  }
-
-  return branch;
-}
-
-// pullRequestTitle formats the Pull Request title. When dependency and workingDir are provided, the title will be
-// [Patcher] [dev] Update gruntwork-io/terraform-aws-vpc/vpc-app dependency
-function pullRequestTitle(dependency: string, workingDir: string): string {
-  let title = "[Patcher]";
-
-  if (workingDir) {
-    title += ` [${workingDir}]`;
-  }
-
-  if (dependency) {
-    title += ` Update ${dependency} dependency`;
-  } else {
-    title += " Update dependencies";
-  }
-
-  return title;
-}
-
-function pullRequestReleaseNotesBreakingVersion(
-  nextBreakingVersion: NextBreakingVersion,
-): string {
-  if (nextBreakingVersion) {
-    return `([Release notes for ${nextBreakingVersion.version}](${nextBreakingVersion.release_notes_url}))`;
-  }
-
-  return "";
-}
-
-function pullRequestPatchesApplied(patchesApplied: PatchesApplied): string {
-  if (patchesApplied) {
-    return `- Patches applied: ${patchesApplied.count}`;
-  }
-
-  return "";
-}
-
-function pullRequestBodyUpdatedModules(modules: UpdatedModule[]): string {
-  return modules
-    .map(
-      (module) => `  - Previous version: \`${module.previous_version}\`
-  - Updated version: \`${
-    module.updated_version
-  }\` ${pullRequestReleaseNotesBreakingVersion(module.next_breaking_version)}
-  ${pullRequestPatchesApplied(module.patches_applied)}`,
-    )
-    .join("\n");
-}
-
-function pullRequestBodySuccessfulUpdates(
-  updatedModules: SuccessfulUpdate[],
-): string {
-  if (updatedModules && updatedModules.length > 0) {
-    return updatedModules
-      .map(
-        (module) => `- \`${module.file_path}\`
-${pullRequestBodyUpdatedModules(module.updated_modules)}`,
-      )
-      .join("\n");
-  }
-
-  return "";
-}
-
-function pullRequestBodyReadmeToUpdate(
-  manualSteps: ManualStepsYouMustFollow[],
-): string {
-  if (manualSteps && manualSteps.length > 0) {
-    return `\n1. Follow the instructions outlined in the \`README-TO-COMPLETE-UPDATE.md\` file and delete it once the update is complete.`;
-  }
-
-  return "";
-}
-
-export function pullRequestBody(
-  patcherRawOutput: string,
-  dependency: string,
-): string {
-  const updateSummary = yaml.parse(patcherRawOutput) as PatcherUpdateSummary;
-
-  return `:robot: This is an automated pull request opened by [Patcher](https://docs.gruntwork.io/patcher/).
-
-## Description
-
-Updated the \`${dependency}\` dependency.
-
-### Updated files
-
-${pullRequestBodySuccessfulUpdates(updateSummary.successful_updates)}
-
-<details>
-  <summary>Raw output from \`patcher update\`</summary>
-
-  \`\`\`yaml
-${patcherRawOutput}
-  \`\`\`
-
-</details>
-
-## Steps to review
-
-1. Check the proposed changes to the \`terraform\` and/or \`terragrunt\` configuration files.${pullRequestBodyReadmeToUpdate(
-    updateSummary.manual_steps_you_must_follow,
-  )}
-1. Validate the changes in the infrastructure by running \`terraform/terragrunt plan\`.
-1. Upon approval, proceed with deploying the infrastructure changes.`;
-}
-
-async function wasCodeUpdated() {
-  const output = await exec.getExecOutput("git", ["status", "--porcelain"]);
-  // If there are changes, they will appear in the stdout. Otherwise, it returns blank.
-  return !!output.stdout;
-}
-
-async function commitAndPushChanges(
-  gitCommiter: GitCommitter,
-  dependency: string,
-  workingDir: string,
-  token: string,
-) {
-  const { owner, repo } = github.context.repo;
-  const head = pullRequestBranch(dependency, workingDir);
-
-  // Setup https auth and https remote url
-  await exec.exec("git", [
-    "remote",
-    "set-url",
-    "origin",
-    `https://${token}@github.com/${owner}/${repo}.git`,
-  ]);
-
-  // Setup committer name and email
-  await exec.exec("git", ["config", "user.name", gitCommiter.name]);
-  await exec.exec("git", ["config", "user.email", gitCommiter.email]);
-
-  // Checkout to new branch and commit
-  await exec.exec("git", ["checkout", "-b", head]);
-  await exec.exec("git", ["add", "."]);
-
-  const commitMessage = "Update dependencies using Patcher by Gruntwork";
-  await exec.exec("git", ["commit", "-m", commitMessage]);
-
-  // Push changes to head branch
-  await exec.exec("git", [
-    "push",
-    "--force",
-    "origin",
-    `${head}:refs/heads/${head}`,
-  ]);
-}
-
-async function openPullRequest(
-  octokit: GitHub,
-  gitCommiter: GitCommitter,
-  patcherRawOutput: string,
-  dependency: string,
-  workingDir: string,
-) {
-  const { repo } = github.context;
-
-  const head = pullRequestBranch(dependency, workingDir);
-  const title = pullRequestTitle(dependency, workingDir);
-  const body = pullRequestBody(patcherRawOutput, dependency);
-
-  const repoDetails = await octokit.rest.repos.get({ ...repo });
-  const base = repoDetails.data.default_branch;
-  core.debug(`Base branch is ${base}. Opening the PR against it.`);
-
-  try {
-    await octokit.rest.pulls.create({ ...repo, title, head, base, body });
-  } catch (error: any) {
-    if (error.message?.includes(`A pull request already exists for`)) {
-      core.error(
-        `A pull request for ${head} already exists. The branch was updated.`,
-      );
-    } else {
-      throw error;
-    }
+      throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
   }
 }
 
@@ -319,7 +102,7 @@ async function downloadGitHubBinary(
   owner: string,
   repo: string,
   tag: string,
-  token: string,
+  token: string
 ): Promise<DownloadedBinary> {
   const binaryName = repoToBinaryMap(repo);
 
@@ -340,14 +123,10 @@ async function downloadGitHubBinary(
   });
 
   const re = new RegExp(`${osPlatform()}.*amd64`);
-  const asset = getReleaseResponse.data.assets.find((obj: any) =>
-    re.test(obj.name),
-  );
+  const asset = getReleaseResponse.data.assets.find((obj: any) => re.test(obj.name));
 
   if (!asset) {
-    throw new Error(
-      `Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`,
-    );
+    throw new Error(`Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`);
   }
 
   // Use @actions/tool-cache to download the binary from GitHub
@@ -358,12 +137,10 @@ async function downloadGitHubBinary(
     `token ${token}`,
     {
       accept: "application/octet-stream",
-    },
+    }
   );
 
-  core.debug(
-    `${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`,
-  );
+  core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
 
   if (path.extname(asset.name) === ".gz") {
     await exec.exec(`mkdir /tmp/${binaryName}`);
@@ -371,23 +148,13 @@ async function downloadGitHubBinary(
 
     const extractedPath = path.join("/tmp", binaryName, binaryName);
 
-    const cachedPath = await toolCache.cacheFile(
-      extractedPath,
-      binaryName,
-      repo,
-      tag,
-    );
+    const cachedPath = await toolCache.cacheFile(extractedPath, binaryName, repo, tag);
     core.debug(`Cached in ${cachedPath}`);
 
     return { folder: cachedPath, name: binaryName };
   }
 
-  const cachedPath = await toolCache.cacheFile(
-    downloadedPath,
-    binaryName,
-    repo,
-    tag,
-  );
+  const cachedPath = await toolCache.cacheFile(downloadedPath, binaryName, repo, tag);
   core.debug(`Cached in ${cachedPath}`);
 
   return { folder: cachedPath, name: binaryName };
@@ -411,13 +178,7 @@ async function downloadAndSetupTooling(octokit: GitHub, token: string) {
   ];
 
   for await (const { org, repo, version } of tools) {
-    const binary = await downloadGitHubBinary(
-      octokit,
-      org,
-      repo,
-      version,
-      token,
-    );
+    const binary = await downloadGitHubBinary(octokit, org, repo, version, token);
     await setupBinaryInEnv(binary);
   }
 }
@@ -426,17 +187,45 @@ function isPatcherCommandValid(command: string): boolean {
   return VALID_COMMANDS.includes(command);
 }
 
+function reportArgs(
+  specFile: string,
+  includeDirs: string,
+  excludeDirs: string,
+  workingDir: string,
+  noColor: boolean
+): string[] {
+  let args = ["report", NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
+
+  if (specFile !== "") {
+    args = args.concat(`${OUTPUT_SPEC_FLAG}=${specFile}`);
+  }
+
+  if (includeDirs !== "") {
+    args = args.concat(`${INCLUDE_DIRS_FLAG}=${includeDirs}`);
+  }
+
+  if (excludeDirs !== "") {
+    args = args.concat(`${EXCLUDE_DIRS_FLAG}=${excludeDirs}`);
+  }
+
+  if (noColor) {
+    args = args.concat(NO_COLOR_FLAG);
+  }
+
+  return args.concat([workingDir]);
+}
+
 function updateArgs(
+  specFile: string,
   updateStrategy: string,
+  prBranch: string,
+  prTitle: string,
   dependency: string,
   workingDir: string,
+  dryRun: boolean,
+  noColor: boolean
 ): string[] {
-  let args = [
-    "update",
-    NO_COLOR_FLAG,
-    NON_INTERACTIVE_FLAG,
-    SKIP_CONTAINER_FLAG,
-  ];
+  let args = ["update", NON_INTERACTIVE_FLAG, SKIP_CONTAINER_FLAG];
 
   // If updateStrategy or dependency are not empty, assign them with the appropriate flag.
   // If they are invalid, Patcher will return an error, which will cause the Action to fail.
@@ -444,74 +233,110 @@ function updateArgs(
     args = args.concat(`${UPDATE_STRATEGY_FLAG}=${updateStrategy}`);
   }
 
-  // If a dependency is provided, set the `target` flag so Patcher can limit the update to a single dependency.
+  // If a spec file is provided, set the `--spec-file` flag so Patcher can use a custom upgrade spec.
+  if (specFile !== "") {
+    args = args.concat(`${SPEC_FILE_FLAG}=${specFile}`);
+  }
+
+  // If a dependency is provided, set the `--spec-target` flag so Patcher can limit the update to a single dependency.
   if (dependency !== "") {
-    args = args.concat(`${TARGET_FLAG}=${dependency}`);
+    args = args.concat(`${SPEC_TARGET_FLAG}=${dependency}`);
+  }
+
+  // Ensure a pull request is published
+  args = args.concat(PUBLISH_FLAG);
+
+  if (prBranch !== "") {
+    args = args.concat(`${PR_BRANCH_FLAG}=${prBranch}`);
+  }
+
+  if (prTitle !== "") {
+    args = args.concat(`${PR_TITLE_FLAG}=${prTitle}`);
+  }
+
+  if (dryRun) {
+    args = args.concat(DRY_RUN_FLAG);
+  }
+
+  if (noColor) {
+    args = args.concat(NO_COLOR_FLAG);
   }
 
   return args.concat([workingDir]);
 }
 
-function getPatcherEnvVars(token: string): { [key: string]: string } {
+function getPatcherEnvVars(gitCommiter: GitCommitter, token: string): { [key: string]: string } {
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
 
   return {
     ...process.env,
     GITHUB_OAUTH_TOKEN: token,
     PATCHER_TELEMETRY_ID: telemetryId,
+    GIT_AUTHOR_NAME: gitCommiter.name,
+    GIT_AUTHOR_EMAIL: gitCommiter.email,
   };
 }
 
 async function runPatcher(
-  octokit: GitHub,
   gitCommiter: GitCommitter,
   command: string,
-  { updateStrategy, dependency, workingDir, token }: PatcherCliArgs,
+  {
+    specFile,
+    includeDirs,
+    excludeDirs,
+    updateStrategy,
+    prBranch,
+    prTitle,
+    dependency,
+    workingDir,
+    token,
+    dryRun,
+    noColor,
+  }: PatcherCliArgs
 ): Promise<void> {
   switch (command) {
     case REPORT_COMMAND: {
       core.startGroup("Running 'patcher report'");
       const reportOutput = await exec.getExecOutput(
         "patcher",
-        [command, NON_INTERACTIVE_FLAG, workingDir],
-        { env: getPatcherEnvVars(token) },
+        reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
+        {
+          env: getPatcherEnvVars(gitCommiter, token),
+        }
       );
       core.endGroup();
 
-      core.startGroup("Setting 'dependencies' output");
-      core.setOutput("dependencies", reportOutput.stdout);
+      core.startGroup("Setting upgrade spec output");
+      core.setOutput("spec", reportOutput.stdout);
       core.endGroup();
 
       return;
     }
     default: {
-      core.startGroup("Running 'patcher update'");
+      core.startGroup("Validating `patcher update` args");
+      if (prBranch === "") {
+        core.setFailed("The pull request branch must be specified when running 'update'");
+        return;
+      }
+      core.endGroup();
+
+      let groupName = "Running 'patcher update'";
+      if (dryRun) {
+        groupName += " (dry run)";
+      }
+      core.startGroup(groupName);
       const updateOutput = await exec.getExecOutput(
         "patcher",
-        updateArgs(updateStrategy, dependency, workingDir),
-        { env: getPatcherEnvVars(token) },
+        updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
+        {
+          env: getPatcherEnvVars(gitCommiter, token),
+        }
       );
       core.endGroup();
 
-      if (await wasCodeUpdated()) {
-        core.startGroup("Commit and push changes");
-        await commitAndPushChanges(gitCommiter, dependency, workingDir, token);
-        core.endGroup();
-
-        core.startGroup("Opening pull request");
-        await openPullRequest(
-          octokit,
-          gitCommiter,
-          updateOutput.stdout,
-          dependency,
-          workingDir,
-        );
-        core.endGroup();
-      } else {
-        core.info(
-          `No changes in ${dependency} after running Patcher. No further action is necessary.`,
-        );
-      }
+      core.startGroup("Setting 'updateResult' output");
+      core.setOutput("updateResult", updateOutput.stdout);
+      core.endGroup();
 
       return;
     }
@@ -533,9 +358,7 @@ function parseCommitAuthor(commitAuthor: string): GitCommitter {
     return { name, email };
   }
 
-  throw Error(
-    `Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`,
-  );
+  throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
 }
 
 async function validateAccessToPatcherCli(octokit: GitHub) {
@@ -547,7 +370,7 @@ async function validateAccessToPatcherCli(octokit: GitHub) {
   } catch (error: any) {
     if (error.message.includes("Not Found")) {
       throw Error(
-        `Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`,
+        `Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`
       );
     } else {
       throw error;
@@ -562,6 +385,13 @@ export async function run() {
   const dependency = core.getInput("dependency");
   const workingDir = core.getInput("working_dir");
   const commitAuthor = core.getInput("commit_author");
+  const specFile = core.getInput("spec_file");
+  const includeDirs = core.getInput("include_dirs");
+  const excludeDirs = core.getInput("exclude_dirs");
+  const prBranch = core.getInput("pull_request_branch");
+  const prTitle = core.getInput("pull_request_title");
+  const dryRun = core.getBooleanInput("dry_run");
+  const noColor = core.getBooleanInput("no_color");
 
   // Always mask the `token` string in the logs.
   core.setSecret(token);
@@ -583,10 +413,17 @@ export async function run() {
   await downloadAndSetupTooling(octokit, token);
   core.endGroup();
 
-  await runPatcher(octokit, gitCommiter, command, {
+  await runPatcher(gitCommiter, command, {
+    specFile,
+    includeDirs,
+    excludeDirs,
     updateStrategy,
+    prBranch,
+    prTitle,
     dependency,
     workingDir,
     token,
+    dryRun,
+    noColor,
   });
 }

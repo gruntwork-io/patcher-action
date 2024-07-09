@@ -1,12 +1,13 @@
-# Add 'updates-<env-name>' as a label to any changes within that env folder 
+# Add 'updates-<env-name>' as a label to any changes within that env folder
 # or any subfolders
 updates-dev:
-- dev/**/*
+  - dev/**/*
+  - dev2/**/*
 updates-stage:
-- stage/**/*
+  - stage/**/*
 updates-prod:
-- prod/**/*
+  - prod/**/*
 
 # Add 'do-not-merge' to changes that require manual checks
 do-not-merge:
-- '**/README-TO-COMPLETE-UPDATE.md'
+  - "**/README-TO-COMPLETE-UPDATE.md"
