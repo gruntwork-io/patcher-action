@@ -13782,15 +13782,19 @@ async function run() {
     const dryRun = core.getBooleanInput("dry_run");
     const noColor = core.getBooleanInput("no_color");
     // Always mask the `token` string in the logs.
+    core.info(`Setting secret`);
     core.setSecret(token);
+    core.info(`Token set`);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
+    core.info(`Getting octokit`);
     const octokit = github.getOctokit(token);
     await validateAccessToPatcherCli(octokit);
+    core.info(`Octokit validated`);
     // Validate if the 'patcher_command' provided is valid.
     if (!isPatcherCommandValid(command)) {
         throw new Error(`Invalid Patcher command ${command}`);
     }
-    core.info(`Patcher's ${command}' command will be executed.`);
+    core.info(`Patcher's '${command}' command will be executed.`);
     // Validate if 'commit_author' has a valid format.
     const gitCommiter = parseCommitAuthor(commitAuthor);
     core.startGroup("Downloading Patcher and patch tools");
