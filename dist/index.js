@@ -13768,8 +13768,8 @@ async function validateAccessToPatcherCli(octokit) {
     }
 }
 async function run() {
-    const githubToken = core.getInput("github_token");
-    var updateToken = core.getInput("update_token");
+    const gruntworkToken = core.getInput("github_token");
+    const patcherUpdateToken = core.getInput("update_token");
     const command = core.getInput("patcher_command");
     const updateStrategy = core.getInput("update_strategy");
     const dependency = core.getInput("dependency");
@@ -13782,17 +13782,15 @@ async function run() {
     const prTitle = core.getInput("pull_request_title");
     const dryRun = core.getBooleanInput("dry_run");
     const noColor = core.getBooleanInput("no_color");
-    if (!updateToken) {
-        // if the user didn't specify a token specifically for `patcher update`,
-        // that's ok, we can try to use the github token instead. doing this adoption
-        // is for backwards compatibility
-        updateToken = githubToken;
-    }
+    // if the user didn't specify a token specifically for `patcher update`,
+    // that's ok, we can try to use the github token instead. doing this adoption
+    // is for back compatibility reasons
+    const updateToken = patcherUpdateToken ? patcherUpdateToken : gruntworkToken;
     // Always mask the token strings in the logs.
-    core.setSecret(githubToken);
+    core.setSecret(gruntworkToken);
     core.setSecret(updateToken);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
-    const octokit = github.getOctokit(githubToken);
+    const octokit = github.getOctokit(gruntworkToken);
     await validateAccessToPatcherCli(octokit);
     // Validate if the 'patcher_command' provided is valid.
     if (!isPatcherCommandValid(command)) {
@@ -13802,7 +13800,7 @@ async function run() {
     // Validate if 'commit_author' has a valid format.
     const gitCommiter = parseCommitAuthor(commitAuthor);
     core.startGroup("Downloading Patcher and patch tools");
-    await downloadAndSetupTooling(octokit, githubToken);
+    await downloadAndSetupTooling(octokit, gruntworkToken);
     core.endGroup();
     await runPatcher(gitCommiter, command, {
         specFile,
