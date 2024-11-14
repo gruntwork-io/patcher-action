@@ -13703,12 +13703,12 @@ function getPatcherEnvVars(gitCommiter, token) {
         GIT_AUTHOR_EMAIL: gitCommiter.email,
     };
 }
-async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, token, dryRun, noColor, }) {
+async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, updateToken, dryRun, noColor, }) {
     switch (command) {
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
             const reportOutput = await exec.getExecOutput("patcher", reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor), {
-                env: getPatcherEnvVars(gitCommiter, token),
+                env: getPatcherEnvVars(gitCommiter, updateToken),
             });
             core.endGroup();
             core.startGroup("Setting upgrade spec output");
@@ -13729,7 +13729,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             }
             core.startGroup(groupName);
             const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor), {
-                env: getPatcherEnvVars(gitCommiter, token),
+                env: getPatcherEnvVars(gitCommiter, updateToken),
             });
             core.endGroup();
             core.startGroup("Setting 'updateResult' output");
@@ -13768,7 +13768,8 @@ async function validateAccessToPatcherCli(octokit) {
     }
 }
 async function run() {
-    const token = core.getInput("github_token");
+    const githubToken = core.getInput("github_token");
+    var updateToken = core.getInput("update_token");
     const command = core.getInput("patcher_command");
     const updateStrategy = core.getInput("update_strategy");
     const dependency = core.getInput("dependency");
@@ -13781,10 +13782,17 @@ async function run() {
     const prTitle = core.getInput("pull_request_title");
     const dryRun = core.getBooleanInput("dry_run");
     const noColor = core.getBooleanInput("no_color");
-    // Always mask the `token` string in the logs.
-    core.setSecret(token);
+    if (!updateToken) {
+        // if the user didn't specify a token specifically for `patcher update`,
+        // that's ok, we can try to use the github token instead. doing this adoption
+        // is for back compatibility reasons
+        updateToken = githubToken;
+    }
+    // Always mask the token strings in the logs.
+    core.setSecret(githubToken);
+    core.setSecret(updateToken);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
-    const octokit = github.getOctokit(token);
+    const octokit = github.getOctokit(githubToken);
     await validateAccessToPatcherCli(octokit);
     // Validate if the 'patcher_command' provided is valid.
     if (!isPatcherCommandValid(command)) {
@@ -13794,7 +13802,7 @@ async function run() {
     // Validate if 'commit_author' has a valid format.
     const gitCommiter = parseCommitAuthor(commitAuthor);
     core.startGroup("Downloading Patcher and patch tools");
-    await downloadAndSetupTooling(octokit, token);
+    await downloadAndSetupTooling(octokit, githubToken);
     core.endGroup();
     await runPatcher(gitCommiter, command, {
         specFile,
@@ -13805,7 +13813,7 @@ async function run() {
         prTitle,
         dependency,
         workingDir,
-        token,
+        updateToken,
         dryRun,
         noColor,
     });
