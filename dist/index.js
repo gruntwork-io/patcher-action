@@ -13785,7 +13785,7 @@ async function run() {
     if (!updateToken) {
         // if the user didn't specify a token specifically for `patcher update`,
         // that's ok, we can try to use the github token instead. doing this adoption
-        // is for back compatibility reasons
+        // is for backwards compatibility
         updateToken = githubToken;
     }
     // Always mask the token strings in the logs.
