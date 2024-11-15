@@ -52,7 +52,7 @@ type PatcherCliArgs = {
   prTitle: string;
   dependency: string;
   workingDir: string;
-  token: string;
+  updateToken: string;
   dryRun: boolean;
   noColor: boolean;
 };
@@ -289,7 +289,7 @@ async function runPatcher(
     prTitle,
     dependency,
     workingDir,
-    token,
+    updateToken,
     dryRun,
     noColor,
   }: PatcherCliArgs
@@ -301,7 +301,7 @@ async function runPatcher(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, token),
+          env: getPatcherEnvVars(gitCommiter, updateToken),
         }
       );
       core.endGroup();
@@ -329,7 +329,7 @@ async function runPatcher(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, token),
+          env: getPatcherEnvVars(gitCommiter, updateToken),
         }
       );
       core.endGroup();
@@ -379,7 +379,8 @@ async function validateAccessToPatcherCli(octokit: GitHub) {
 }
 
 export async function run() {
-  const token = core.getInput("github_token");
+  const gruntworkToken = core.getInput("github_token");
+  const patcherUpdateToken = core.getInput("update_token");
   const command = core.getInput("patcher_command");
   const updateStrategy = core.getInput("update_strategy");
   const dependency = core.getInput("dependency");
@@ -393,11 +394,17 @@ export async function run() {
   const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
 
-  // Always mask the `token` string in the logs.
-  core.setSecret(token);
+  // if the user didn't specify a token specifically for `patcher update`,
+  // that's ok, we can try to use the github token instead. doing this adoption
+  // is for back compatibility reasons
+  const updateToken = patcherUpdateToken ? patcherUpdateToken : gruntworkToken;
+
+  // Always mask the token strings in the logs.
+  core.setSecret(gruntworkToken);
+  core.setSecret(updateToken);
 
   // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
-  const octokit = github.getOctokit(token);
+  const octokit = github.getOctokit(gruntworkToken);
   await validateAccessToPatcherCli(octokit);
 
   // Validate if the 'patcher_command' provided is valid.
@@ -410,7 +417,7 @@ export async function run() {
   const gitCommiter = parseCommitAuthor(commitAuthor);
 
   core.startGroup("Downloading Patcher and patch tools");
-  await downloadAndSetupTooling(octokit, token);
+  await downloadAndSetupTooling(octokit, gruntworkToken);
   core.endGroup();
 
   await runPatcher(gitCommiter, command, {
@@ -422,7 +429,7 @@ export async function run() {
     prTitle,
     dependency,
     workingDir,
-    token,
+    updateToken,
     dryRun,
     noColor,
   });
