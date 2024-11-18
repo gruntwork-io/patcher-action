@@ -10,6 +10,9 @@ inputs:
   github_token:
     description: "GitHub's Personal Access Token (PAT). Defaults to GITHUB_TOKEN."
     default: ${{ github.token }}
+  update_token:
+    description: "Personal Access Token (PAT) used for 'update' to publish PRs against the relevant repo."
+    default: ${{ github.token }}
   patcher_command:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"
