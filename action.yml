@@ -8,7 +8,10 @@ branding:
 
 inputs:
   github_token:
-    description: "GitHub's Personal Access Token (PAT). Defaults to GITHUB_TOKEN."
+    description: "GitHub's Personal Access Token (PAT)."
+    default: ${{ github.token }}
+  read_token:
+    description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions."
     default: ${{ github.token }}
   update_token:
     description: "Personal Access Token (PAT) used for 'update' to publish PRs against the relevant repo."

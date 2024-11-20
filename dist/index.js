@@ -13535,7 +13535,7 @@ const exec = __importStar(__nccwpck_require__(1514));
 // Define constants
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
-const PATCHER_VERSION = "v0.9.5";
+const PATCHER_VERSION = "v0.10.0";
 const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
 const TERRAPATCH_VERSION = "v0.1.6";
 const HCLEDIT_ORG = "minamijoyo";
@@ -13693,22 +13693,23 @@ function updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, wor
     }
     return args.concat([workingDir]);
 }
-function getPatcherEnvVars(gitCommiter, token) {
+function getPatcherEnvVars(gitCommiter, readToken, updateToken) {
     const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
     return {
         ...process.env,
-        GITHUB_OAUTH_TOKEN: token,
+        GITHUB_OAUTH_TOKEN: readToken,
+        GITHUB_PUBLISH_TOKEN: updateToken,
         PATCHER_TELEMETRY_ID: telemetryId,
         GIT_AUTHOR_NAME: gitCommiter.name,
         GIT_AUTHOR_EMAIL: gitCommiter.email,
     };
 }
-async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, updateToken, dryRun, noColor, }) {
+async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, readToken, updateToken, dryRun, noColor, }) {
     switch (command) {
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
             const reportOutput = await exec.getExecOutput("patcher", reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor), {
-                env: getPatcherEnvVars(gitCommiter, updateToken),
+                env: getPatcherEnvVars(gitCommiter, readToken, updateToken),
             });
             core.endGroup();
             core.startGroup("Setting upgrade spec output");
@@ -13729,7 +13730,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             }
             core.startGroup(groupName);
             const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor), {
-                env: getPatcherEnvVars(gitCommiter, updateToken),
+                env: getPatcherEnvVars(gitCommiter, readToken, updateToken),
             });
             core.endGroup();
             core.startGroup("Setting 'updateResult' output");
@@ -13769,6 +13770,7 @@ async function validateAccessToPatcherCli(octokit) {
 }
 async function run() {
     const gruntworkToken = core.getInput("github_token");
+    const patcherReadToken = core.getInput("read_token");
     const patcherUpdateToken = core.getInput("update_token");
     const command = core.getInput("patcher_command");
     const updateStrategy = core.getInput("update_strategy");
@@ -13785,9 +13787,11 @@ async function run() {
     // if the user didn't specify a token specifically for `patcher update`,
     // that's ok, we can try to use the github token instead. doing this adoption
     // is for back compatibility reasons
+    const readToken = patcherReadToken ? patcherReadToken : gruntworkToken;
     const updateToken = patcherUpdateToken ? patcherUpdateToken : gruntworkToken;
     // Always mask the token strings in the logs.
     core.setSecret(gruntworkToken);
+    core.setSecret(readToken);
     core.setSecret(updateToken);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
     const octokit = github.getOctokit(gruntworkToken);
@@ -13811,6 +13815,7 @@ async function run() {
         prTitle,
         dependency,
         workingDir,
+        readToken,
         updateToken,
         dryRun,
         noColor,
