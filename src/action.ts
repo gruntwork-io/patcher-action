@@ -266,7 +266,11 @@ function updateArgs(
   return args.concat([workingDir]);
 }
 
-function getPatcherEnvVars(gitCommiter: GitCommitter, readToken: string, updateToken: string): { [key: string]: string } {
+function getPatcherEnvVars(
+  gitCommiter: GitCommitter,
+  readToken: string,
+  updateToken: string
+): { [key: string]: string } {
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
 
   return {
