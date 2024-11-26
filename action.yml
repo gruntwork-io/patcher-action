@@ -11,11 +11,9 @@ inputs:
     description: "GitHub's Personal Access Token (PAT)."
     default: ${{ github.token }}
   read_token:
-    description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions."
-    default: ${{ github.token }}
+    description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions. If left unset, github_token will be used."
   update_token:
-    description: "Personal Access Token (PAT) used for 'update' to publish PRs against the relevant repo."
-    default: ${{ github.token }}
+    description: "Personal Access Token (PAT) used for 'update' to publish PRs against the relevant repo. If left unset, github_token will be used."
   patcher_command:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"
