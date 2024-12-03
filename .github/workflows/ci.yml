@@ -50,7 +50,7 @@ jobs:
         id: run-report
         uses: ./
         with:
-          github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
+          github_token: ${{ secrets.PATCHER_FULL_REPO }}
           patcher_command: report
           working_dir: infrastructure-live
           spec_file: spec.json
@@ -79,7 +79,7 @@ jobs:
         id: run-update
         uses: ./
         with:
-          github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
+          github_token: ${{ secrets.PATCHER_FULL_REPO }}
           patcher_command: update
           working_dir: infrastructure-live
           spec_file: spec.json
