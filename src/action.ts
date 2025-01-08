@@ -11,7 +11,7 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
-const PATCHER_VERSION = "v0.11.0";
+const PATCHER_VERSION = "v0.9.5";
 const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
 const TERRAPATCH_VERSION = "v0.1.6";
 
@@ -126,6 +126,8 @@ async function downloadGitHubBinary(
   const re = new RegExp(`${osPlatform()}.*amd64`);
   const asset = getReleaseResponse.data.assets.find((obj: any) => re.test(obj.name));
 
+  core.info(`repo url path: ${asset?.url}`);
+
   if (!asset) {
     throw new Error(`Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`);
   }
@@ -141,22 +143,25 @@ async function downloadGitHubBinary(
     }
   );
 
-  core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
+  
+  core.info(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
+  core.info(`binaryName: ${binaryName}`)
 
   if (path.extname(asset.name) === ".gz") {
     await exec.exec(`mkdir /tmp/${binaryName}`);
     await exec.exec(`tar -C /tmp/${binaryName} -xzvf ${downloadedPath}`);
 
     const extractedPath = path.join("/tmp", binaryName, binaryName);
+    core.info(`extractedPath: ${extractedPath}`)
 
     const cachedPath = await toolCache.cacheFile(extractedPath, binaryName, repo, tag);
-    core.debug(`Cached in ${cachedPath}`);
+    core.info(`Cached in ${cachedPath}`);
 
     return { folder: cachedPath, name: binaryName };
   }
 
   const cachedPath = await toolCache.cacheFile(downloadedPath, binaryName, repo, tag);
-  core.debug(`Cached in ${cachedPath}`);
+  core.info(`Cached in ${cachedPath}`);
 
   return { folder: cachedPath, name: binaryName };
 }
