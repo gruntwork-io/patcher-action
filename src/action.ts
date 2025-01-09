@@ -21,9 +21,12 @@ const TFUPDATE_VERSION = "v0.6.5";
 const HCLEDIT_GITHUB_REPO = "hcledit";
 const HCLEDIT_VERSION = "v0.2.5";
 
+const DIAGNOSE_COMMAND = "diagnose";
 const REPORT_COMMAND = "report";
 const UPDATE_COMMAND = "update";
-const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
+const VALID_COMMANDS = [DIAGNOSE_COMMAND, REPORT_COMMAND, UPDATE_COMMAND];
+
+const PATCHER_PATH = "PATCHER_PATH";
 
 const NON_INTERACTIVE_FLAG = "--non-interactive";
 const DRY_RUN_FLAG = "--dry-run";
@@ -74,8 +77,24 @@ function osPlatform() {
     case "linux":
     case "darwin":
       return platform;
+    case "win32":
+      return "windows";
     default:
-      throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
+      throw new Error("Unsupported operating system - the Patcher action is only released for Darwin, Linux, and Windows32.");
+  }
+}
+
+function arch() {
+  const arch = os.arch();
+  switch (arch) {
+    case "arm64":
+      return arch
+    case "x64":
+      return "amd64";
+    case "ia32":
+      return "386";
+    default:
+      throw new Error("Unsupported architecture - the Patcher action is only released for arm64, amd64, and i386.");
   }
 }
 
@@ -123,8 +142,13 @@ async function downloadGitHubBinary(
     tag,
   });
 
-  const re = new RegExp(`${osPlatform()}.*amd64`);
+  const regexStr = `${osPlatform()}.*${arch()}`;
+  core.info(`regexStr: ${regexStr}`);
+  const re = new RegExp(regexStr);
   const asset = getReleaseResponse.data.assets.find((obj: any) => re.test(obj.name));
+  core.info(`asset name: ${asset?.name}`)
+  core.info(`asset size: ${asset?.size}`)
+  core.info(`asset browser url: ${asset?.browser_download_url}`)
 
   core.info(`repo url path: ${asset?.url}`);
 
@@ -157,11 +181,30 @@ async function downloadGitHubBinary(
     const cachedPath = await toolCache.cacheFile(extractedPath, binaryName, repo, tag);
     core.info(`Cached in ${cachedPath}`);
 
+    if (binaryName === "patcher") {
+      const path = `${cachedPath}/patcher`
+      core.info(`declaring ${PATCHER_PATH} to be ${path}`)
+      core.exportVariable(PATCHER_PATH, path);
+    } else {
+      core.info(`did not export ${PATCHER_PATH}`)
+    }
+    await exec.exec("echo", [`$${PATCHER_PATH}`])
+
     return { folder: cachedPath, name: binaryName };
   }
+  
 
   const cachedPath = await toolCache.cacheFile(downloadedPath, binaryName, repo, tag);
   core.info(`Cached in ${cachedPath}`);
+
+  if (binaryName === "patcher") {
+    const path = `${cachedPath}/patcher`
+    core.info(`declaring ${PATCHER_PATH} to be ${path}`)
+    core.exportVariable(PATCHER_PATH, path);
+  } else {
+    core.info(`did not export ${PATCHER_PATH}`)
+  }
+  await exec.exec("echo", [`$${PATCHER_PATH}`])
 
   return { folder: cachedPath, name: binaryName };
 }
@@ -307,6 +350,18 @@ async function runPatcher(
   }: PatcherCliArgs
 ): Promise<void> {
   switch (command) {
+    case DIAGNOSE_COMMAND: {
+      core.startGroup("Running diagnostics");
+      await runDiagnostics();
+      core.endGroup();
+      core.startGroup("Running 'patcher --help'");
+      await exec.exec(
+        "patcher", ["--help"], {}
+      );
+      core.endGroup();
+
+      return;
+    }
     case REPORT_COMMAND: {
       core.startGroup("Running 'patcher report'");
       const reportOutput = await exec.getExecOutput(
@@ -352,6 +407,27 @@ async function runPatcher(
 
       return;
     }
+  }
+}
+
+async function runDiagnostics() {
+  // this should be ${PATCHER_PATH} but it's not working for whatever reason
+  const patcherPath = "/opt/hostedtoolcache/patcher-cli/0.9.5/arm64/patcher";
+  let cmdsToExecute = [
+    `echo $${PATCHER_PATH}`,
+    "uname -m",
+    "which patcher",
+    `ls -a ${patcherPath}`,
+    `file ${patcherPath}`,
+    // it would be cool to use strace here, but that would require yet another binary download and install 
+  ];
+
+  for (var cmd of cmdsToExecute) {
+    core.info(`running '${cmd}'...`);
+    const cmdArgs = cmd.split(" ");
+    await exec.exec(
+      cmdArgs[0], 
+      cmdArgs.slice(1));
   }
 }
 
