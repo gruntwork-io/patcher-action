@@ -74,8 +74,26 @@ function osPlatform() {
     case "linux":
     case "darwin":
       return platform;
+    case "win32":
+      return "windows";
     default:
-      throw new Error("Unsupported operating system - the Patcher action is only released for Darwin and Linux");
+      throw new Error(
+        "Unsupported operating system - the Patcher action is only released for Darwin, Linux, and Windows32."
+      );
+  }
+}
+
+function arch() {
+  const arch = os.arch();
+  switch (arch) {
+    case "arm64":
+      return arch;
+    case "x64":
+      return "amd64";
+    case "ia32":
+      return "386";
+    default:
+      throw new Error("Unsupported architecture - the Patcher action is only released for arm64, amd64, and i386.");
   }
 }
 
@@ -123,7 +141,7 @@ async function downloadGitHubBinary(
     tag,
   });
 
-  const re = new RegExp(`${osPlatform()}.*amd64`);
+  const re = new RegExp(`${osPlatform()}.*${arch()}`);
   const asset = getReleaseResponse.data.assets.find((obj: any) => re.test(obj.name));
 
   if (!asset) {
