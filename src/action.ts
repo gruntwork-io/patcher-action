@@ -290,6 +290,9 @@ function getPatcherEnvVars(
   updateToken: string
 ): { [key: string]: string } {
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
+  // this is a workaround to get the version from the package.json file, since rootDir doesn't contain the package.json file
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const packageJson = require("../package.json");
 
   return {
     ...process.env,
@@ -298,6 +301,7 @@ function getPatcherEnvVars(
     PATCHER_TELEMETRY_ID: telemetryId,
     GIT_AUTHOR_NAME: gitCommiter.name,
     GIT_AUTHOR_EMAIL: gitCommiter.email,
+    PATCHER_ACTIONS_VERSION: `v${packageJson.version}`,
   };
 }
 
