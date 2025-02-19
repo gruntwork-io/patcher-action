@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - caitlin/report-patcher-action-version
 
 jobs:
   version:
