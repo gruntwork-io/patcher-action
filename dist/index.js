@@ -13643,7 +13643,7 @@ async function downloadAndSetupTooling(octokit, token) {
         {
             org: GRUNTWORK_GITHUB_ORG,
             repo: PATCHER_GITHUB_REPO,
-            version: PATCHER_VERSION,
+            version: "caitlin/patcher-segment-telemetry", // version: PATCHER_VERSION,
         },
         {
             org: GRUNTWORK_GITHUB_ORG,
