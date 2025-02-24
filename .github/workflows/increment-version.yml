@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - caitlin/fix-semver-bump
 
 jobs:
   version:
@@ -11,6 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - run: git config user.email
       - run: git config user.name "$GITHUB_ACTOR"
       - run: npm version minor -m "v%s"
       - run: VERSION=$(node -p "require('./package.json').version")
