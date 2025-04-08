@@ -11,7 +11,7 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
-const PATCHER_VERSION = "v0.13.0";
+const PATCHER_VERSION = "v0.13.1";
 const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
 const TERRAPATCH_VERSION = "v0.1.6";
 
