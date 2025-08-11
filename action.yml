@@ -18,9 +18,9 @@ inputs:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"
   patcher_version:
-    description: "Version of Patcher to use. Defaults to the v0.14.2 version."
+    description: "Version of Patcher to use. Defaults to the v0.15.1 version."
     required: false
-    default: "v0.14.2"
+    default: "v0.15.1"
   include_dirs:
     description: >
       "Include only directories matching the given double-star glob pattern. Only works for `report`."

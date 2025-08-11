@@ -13535,7 +13535,7 @@ const exec = __importStar(__nccwpck_require__(1514));
 // Define constants
 const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
 const PATCHER_GITHUB_REPO = "patcher-cli";
-const PATCHER_VERSION = core.getInput("patcher_version") || "v0.14.2";
+const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.1";
 const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
 const TERRAPATCH_VERSION = "v0.1.6";
 const HCLEDIT_ORG = "minamijoyo";
