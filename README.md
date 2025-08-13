@@ -37,10 +37,36 @@ steps:
 | `pull_request_title`  | Title of the Pull Request. Only used when running `update`.                                                                                                                                              | `[Patcher] Update dependencies`                |
 | `dry_run`             | Simulate all operations using Patcher's dry-run mode. Useful for test workflows. Only used when running `update`.                                                                                        | `false`                                        |
 | `no_color`            | Whether to disable color output.                                                                                                                                                                         | `false`                                        |
+| `patcher_github_org`  | GitHub organization where Patcher CLI is hosted. Allows using forks from different organizations.                                                                                                       | `gruntwork-io`                                 |
+| `patcher_github_repo` | GitHub repository name for Patcher CLI. Allows using renamed forks.                                                                                                                                     | `patcher-cli`                                  |
+| `terrapatch_github_org` | GitHub organization where Terrapatch CLI is hosted. Allows using forks from different organizations.                                                                                                   | `gruntwork-io`                                 |
+| `terrapatch_github_repo` | GitHub repository name for Terrapatch CLI. Allows using renamed forks.                                                                                                                                | `terrapatch-cli`                               |
 
 ### Action outputs
 - `spec`: All discovered dependencies from the given directory using any filters. Only works for `report`.
 - `updateResult`: The result of the upgrade. Only works for `update`.
+
+### Using Alternative GitHub Repositories
+
+By default, the action downloads Patcher and Terrapatch from the official Gruntwork repositories. However, you can configure it to use alternative repositories (such as your own forks) by using the following inputs:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: gruntwork-io/patcher-action@v2
+    with:
+      patcher_github_org: "my-org"           # Use your organization instead of gruntwork-io
+      patcher_github_repo: "my-patcher-cli"  # Use your fork name if different
+      terrapatch_github_org: "my-org"        # Use your organization for Terrapatch too
+      terrapatch_github_repo: "my-terrapatch-cli"
+```
+
+This is particularly useful for:
+- **Customer forks**: When you've forked Patcher to your own GitHub organization and want to use your fork without needing to fork this entire action
+- **Public repositories**: If your fork is public, you won't need a GitHub PAT to access it
+- **Custom builds**: When you need to use a customized version of Patcher for your specific needs
+
+**Note**: The repositories you specify must contain valid releases with the same asset naming conventions as the official Gruntwork repositories.
 
 ### Promotion Workflows 
 

@@ -56,6 +56,18 @@ inputs:
   no_color:
     description: "Disable color output. Defaults to false."
     default: "false"
+  patcher_github_org:
+    description: "GitHub organization where Patcher CLI is hosted. Allows using forks from different organizations."
+    default: "gruntwork-io"
+  patcher_github_repo:
+    description: "GitHub repository name for Patcher CLI. Allows using renamed forks."
+    default: "patcher-cli"
+  terrapatch_github_org:
+    description: "GitHub organization where Terrapatch CLI is hosted. Allows using forks from different organizations."
+    default: "gruntwork-io"
+  terrapatch_github_repo:
+    description: "GitHub repository name for Terrapatch CLI. Allows using renamed forks."
+    default: "terrapatch-cli"
 
 outputs:
   dependencies:
