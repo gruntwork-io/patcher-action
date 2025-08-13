@@ -1,0 +1,37 @@
+name: Update Dependencies (Custom Patcher Repository)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run weekly on Mondays at 04:15 UTC
+    - cron: "15 4 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Update dependencies using custom Patcher repository
+        uses: gruntwork-io/patcher-action@v2
+        with:
+          # Use a forked version of Patcher from your organization
+          patcher_github_org: "my-org"
+          patcher_github_repo: "patcher-cli"
+          terrapatch_github_org: "my-org" 
+          terrapatch_github_repo: "terrapatch-cli"
+          
+          # Standard Patcher configuration
+          patcher_command: update
+          pull_request_branch: "patcher-updates-custom"
+          pull_request_title: "[Patcher] Update dependencies (using custom repo)"
+          
+          # If your repositories are private, you'll need a PAT with access
+          # github_token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
+          
+          # For public repositories, the default GITHUB_TOKEN works fine
+          github_token: ${{ secrets.GITHUB_TOKEN }}

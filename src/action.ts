@@ -9,10 +9,10 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 // Define constants
 
-const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
-const PATCHER_GITHUB_REPO = "patcher-cli";
+const DEFAULT_GRUNTWORK_GITHUB_ORG = "gruntwork-io";
+const DEFAULT_PATCHER_GITHUB_REPO = "patcher-cli";
 const PATCHER_VERSION = "v0.14.2";
-const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
+const DEFAULT_TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
 const TERRAPATCH_VERSION = "v0.1.6";
 
 const HCLEDIT_ORG = "minamijoyo";
@@ -179,17 +179,24 @@ async function downloadGitHubBinary(
   return { folder: cachedPath, name: binaryName };
 }
 
-async function downloadAndSetupTooling(octokit: GitHub, token: string) {
+async function downloadAndSetupTooling(
+  octokit: GitHub,
+  token: string,
+  patcherOrg: string,
+  patcherRepo: string,
+  terrapatchOrg: string,
+  terrapatchRepo: string
+) {
   // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
   const tools = [
     {
-      org: GRUNTWORK_GITHUB_ORG,
-      repo: PATCHER_GITHUB_REPO,
+      org: patcherOrg,
+      repo: patcherRepo,
       version: PATCHER_VERSION,
     },
     {
-      org: GRUNTWORK_GITHUB_ORG,
-      repo: TERRAPATCH_GITHUB_REPO,
+      org: terrapatchOrg,
+      repo: terrapatchRepo,
       version: TERRAPATCH_VERSION,
     },
     { org: HCLEDIT_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
@@ -390,16 +397,16 @@ function parseCommitAuthor(commitAuthor: string): GitCommitter {
   throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
 }
 
-async function validateAccessToPatcherCli(octokit: GitHub) {
+async function validateAccessToPatcherCli(octokit: GitHub, patcherOrg: string, patcherRepo: string) {
   try {
     await octokit.rest.repos.get({
-      owner: GRUNTWORK_GITHUB_ORG,
-      repo: PATCHER_GITHUB_REPO,
+      owner: patcherOrg,
+      repo: patcherRepo,
     });
   } catch (error: any) {
     if (error.message.includes("Not Found")) {
       throw Error(
-        `Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`
+        `Can not find the '${patcherOrg}/${patcherRepo}' repo. If using the default Gruntwork repositories and you are a Gruntwork customer, contact support@gruntwork.io. If using a custom repository, please verify the organization and repository names are correct and accessible.`
       );
     } else {
       throw error;
@@ -424,6 +431,12 @@ export async function run() {
   const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
 
+  // Get configurable GitHub repository settings with defaults
+  const patcherOrg = core.getInput("patcher_github_org") || DEFAULT_GRUNTWORK_GITHUB_ORG;
+  const patcherRepo = core.getInput("patcher_github_repo") || DEFAULT_PATCHER_GITHUB_REPO;
+  const terrapatchOrg = core.getInput("terrapatch_github_org") || DEFAULT_GRUNTWORK_GITHUB_ORG;
+  const terrapatchRepo = core.getInput("terrapatch_github_repo") || DEFAULT_TERRAPATCH_GITHUB_REPO;
+
   // if the user didn't specify a token specifically for `patcher update`,
   // that's ok, we can try to use the github token instead. doing this adoption
   // is for back compatibility reasons
@@ -437,7 +450,7 @@ export async function run() {
 
   // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
   const octokit = github.getOctokit(gruntworkToken);
-  await validateAccessToPatcherCli(octokit);
+  await validateAccessToPatcherCli(octokit, patcherOrg, patcherRepo);
 
   // Validate if the 'patcher_command' provided is valid.
   if (!isPatcherCommandValid(command)) {
@@ -449,7 +462,9 @@ export async function run() {
   const gitCommiter = parseCommitAuthor(commitAuthor);
 
   core.startGroup("Downloading Patcher and patch tools");
-  await downloadAndSetupTooling(octokit, gruntworkToken);
+  core.info(`Using Patcher from: ${patcherOrg}/${patcherRepo}`);
+  core.info(`Using Terrapatch from: ${terrapatchOrg}/${terrapatchRepo}`);
+  await downloadAndSetupTooling(octokit, gruntworkToken, patcherOrg, patcherRepo, terrapatchOrg, terrapatchRepo);
   core.endGroup();
 
   await runPatcher(gitCommiter, command, {
