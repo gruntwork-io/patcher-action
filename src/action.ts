@@ -9,11 +9,11 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 // Define constants
 
-const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
-const PATCHER_GITHUB_REPO = "patcher-cli";
+const GRUNTWORK_GITHUB_ORG = core.getInput("github_org") || "gruntwork-io";
+const PATCHER_GITHUB_REPO = core.getInput("patcher_github_repo") || "patcher-cli";
 const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.1";
-const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
-const TERRAPATCH_VERSION = "v0.1.6";
+const TERRAPATCH_GITHUB_REPO = core.getInput("terrapatch_github_repo") || "terrapatch-cli";
+const TERRAPATCH_VERSION = core.getInput("terrapatch_version") || "v0.1.6";
 
 const HCLEDIT_ORG = "minamijoyo";
 const TFUPDATE_GITHUB_REPO = "tfupdate";
