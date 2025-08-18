@@ -13533,11 +13533,11 @@ const toolCache = __importStar(__nccwpck_require__(7784));
 const core = __importStar(__nccwpck_require__(2186));
 const exec = __importStar(__nccwpck_require__(1514));
 // Define constants
-const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
-const PATCHER_GITHUB_REPO = "patcher-cli";
+const GRUNTWORK_GITHUB_ORG = core.getInput("github_org") || "gruntwork-io";
+const PATCHER_GITHUB_REPO = core.getInput("patcher_github_repo") || "patcher-cli";
 const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.1";
-const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
-const TERRAPATCH_VERSION = "v0.1.6";
+const TERRAPATCH_GITHUB_REPO = core.getInput("terrapatch_github_repo") || "terrapatch-cli";
+const TERRAPATCH_VERSION = core.getInput("terrapatch_version") || "v0.1.6";
 const HCLEDIT_ORG = "minamijoyo";
 const TFUPDATE_GITHUB_REPO = "tfupdate";
 const TFUPDATE_VERSION = "v0.6.5";
@@ -14052,7 +14052,7 @@ module.exports = JSON.parse('[[[0,44],"disallowed_STD3_valid"],[[45,46],"valid"]
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse('{"name":"patcher-action","version":"2.11.1","description":"Run Patcher by Gruntwork.io","main":"index.js","repository":"git@github.com:gruntwork-io/patcher-action.git","author":"Gruntwork.io <grunty@gruntwork.io>","license":"Apache-2.0","scripts":{"build":"ncc build src/index.ts -o dist","format":"prettier --write **/*.ts","format-check":"prettier --check **/*.ts","lint":"eslint --ext .ts ./"},"dependencies":{"@actions/core":"^1.10.0","@actions/exec":"^1.1.1","@actions/github":"^5.1.1","@actions/tool-cache":"^2.0.1","@octokit/plugin-throttling":"^7.0.0"},"devDependencies":{"@vercel/ncc":"^0.36.1","@types/node":"^20.5.0","@typescript-eslint/eslint-plugin":"^6.6.0","@typescript-eslint/parser":"^6.6.0","eslint":"^8.48.0","eslint-config-prettier":"^9.0.0","eslint-plugin-prettier":"^5.0.0","prettier":"^3.0.3","typescript":"^5.2.2"}}');
+module.exports = JSON.parse('{"name":"patcher-action","version":"2.13.0","description":"Run Patcher by Gruntwork.io","main":"index.js","repository":"git@github.com:gruntwork-io/patcher-action.git","author":"Gruntwork.io <grunty@gruntwork.io>","license":"Apache-2.0","scripts":{"build":"ncc build src/index.ts -o dist","format":"prettier --write **/*.ts","format-check":"prettier --check **/*.ts","lint":"eslint --ext .ts ./"},"dependencies":{"@actions/core":"^1.10.0","@actions/exec":"^1.1.1","@actions/github":"^5.1.1","@actions/tool-cache":"^2.0.1","@octokit/plugin-throttling":"^7.0.0"},"devDependencies":{"@vercel/ncc":"^0.36.1","@types/node":"^20.5.0","@typescript-eslint/eslint-plugin":"^6.6.0","@typescript-eslint/parser":"^6.6.0","eslint":"^8.48.0","eslint-config-prettier":"^9.0.0","eslint-plugin-prettier":"^5.0.0","prettier":"^3.0.3","typescript":"^5.2.2"}}');
 
 /***/ })
 

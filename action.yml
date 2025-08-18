@@ -10,6 +10,10 @@ inputs:
   github_token:
     description: "GitHub's Personal Access Token (PAT). Used to authenticate usage of Patcher as an action."
     default: ${{ github.token }}
+  github_org:
+    description: "GitHub organization to use. Defaults to 'gruntwork-io'."
+    required: false
+    default: "gruntwork-io"
   read_token:
     description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions. If left unset, github_token will be used."
   update_token:
@@ -17,10 +21,22 @@ inputs:
   patcher_command:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"
+  patcher_github_repo:
+    description: "GitHub repository to use for downloading patcher cli. Defaults to 'patcher-cli'."
+    required: false
+    default: patcher-cli
   patcher_version:
     description: "Version of Patcher to use. Defaults to the v0.15.1 version."
     required: false
     default: "v0.15.1"
+  terrapatch_github_repo:
+    description: "GitHub repository to use for downloading terrapatch cli. Defaults to 'terrapatch-cli'."
+    required: false
+    default: "terrapatch-cli"
+  terrapatch_version:
+    description: "Version of terrapatch to use. Defaults to the v0.1.6 version."
+    required: false
+    default: "v0.1.6"
   include_dirs:
     description: >
       "Include only directories matching the given double-star glob pattern. Only works for `report`."
