@@ -11,7 +11,7 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 const GRUNTWORK_GITHUB_ORG = core.getInput("scm_org") || "gruntwork-io";
 const PATCHER_GITHUB_REPO = core.getInput("patcher_git_repo") || "patcher-cli";
-const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.1";
+const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.2";
 const TERRAPATCH_GITHUB_REPO = core.getInput("terrapatch_git_repo") || "terrapatch-cli";
 const TERRAPATCH_VERSION = core.getInput("terrapatch_version") || "v0.1.6";
 
@@ -135,7 +135,10 @@ class GitHubProvider implements ScmProvider {
 
   constructor(config: ScmConfig) {
     this.octokit = github.getOctokit(config.token, {
-      baseUrl: config.baseUrl === "https://github.com" ? undefined : `${config.baseUrl}/api/${config.apiVersion}`,
+      baseUrl:
+        config.baseUrl === "https://github.com"
+          ? "https://api.github.com"
+          : `${config.baseUrl}/api/${config.apiVersion}`,
     });
   }
 
