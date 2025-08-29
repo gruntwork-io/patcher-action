@@ -13602,7 +13602,9 @@ async function setupBinaryInEnv(binary) {
 class GitHubProvider {
     constructor(config) {
         this.octokit = github.getOctokit(config.token, {
-            baseUrl: config.baseUrl === "https://github.com" ? "https://api.github.com" : `${config.baseUrl}/api/${config.apiVersion}`,
+            baseUrl: config.baseUrl === "https://github.com"
+                ? "https://api.github.com"
+                : `${config.baseUrl}/api/${config.apiVersion}`,
         });
     }
     async getReleaseByTag(owner, repo, tag) {
