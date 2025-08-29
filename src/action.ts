@@ -291,14 +291,9 @@ async function downloadScmBinary(
   }
 
   // Use @actions/tool-cache to download the binary
-  const downloadedPath = await toolCache.downloadTool(
-    asset.browser_download_url || asset.url,
-    undefined,
-    `Bearer ${token}`,
-    {
-      accept: "application/octet-stream",
-    }
-  );
+  const downloadedPath = await toolCache.downloadTool(asset.url, undefined, `Bearer ${token}`, {
+    accept: "application/octet-stream",
+  });
 
   core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
 
