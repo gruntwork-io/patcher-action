@@ -14,6 +14,18 @@ inputs:
     description: "GitHub organization to use. Defaults to 'gruntwork-io'."
     required: false
     default: "gruntwork-io"
+  scm_base_url:
+    description: "Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise, 'https://gitlab.company.com' for GitLab). Defaults to 'https://github.com' for GitHub.com."
+    required: false
+    default: "https://github.com"
+  scm_type:
+    description: "Type of SCM provider. Valid options: 'github' or 'gitlab'. Defaults to 'github'."
+    required: false
+    default: "github"
+  scm_api_version:
+    description: "API version for the SCM provider. Defaults to 'v3' for GitHub, 'v4' for GitLab."
+    required: false
+    default: ""
   read_token:
     description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions. If left unset, github_token will be used."
   update_token:

@@ -13599,7 +13599,93 @@ async function setupBinaryInEnv(binary) {
     core.addPath(binary.folder);
     await exec.exec("chmod", ["+x", binaryPath]);
 }
-async function downloadGitHubBinary(octokit, owner, repo, tag, token) {
+class GitHubProvider {
+    constructor(config) {
+        this.octokit = github.getOctokit(config.token, {
+            baseUrl: config.baseUrl === "https://github.com" ? undefined : `${config.baseUrl}/api/${config.apiVersion}`
+        });
+    }
+    async getReleaseByTag(owner, repo, tag) {
+        const response = await this.octokit.rest.repos.getReleaseByTag({
+            owner,
+            repo,
+            tag,
+        });
+        return response.data;
+    }
+    async validateAccess(owner, repo) {
+        try {
+            await this.octokit.rest.repos.get({
+                owner,
+                repo,
+            });
+        }
+        catch (error) {
+            if (error.message.includes("Not Found")) {
+                throw Error(`Can not find the '${repo}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`);
+            }
+            else {
+                throw error;
+            }
+        }
+    }
+}
+class GitLabProvider {
+    constructor(config) {
+        this.baseUrl = `${config.baseUrl}/api/${config.apiVersion}`;
+        this.token = config.token;
+    }
+    async getReleaseByTag(owner, repo, tag) {
+        var _a, _b;
+        const projectId = encodeURIComponent(`${owner}/${repo}`);
+        const response = await fetch(`${this.baseUrl}/projects/${projectId}/releases/${tag}`, {
+            headers: {
+                'Authorization': `Bearer ${this.token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        if (!response.ok) {
+            throw new Error(`GitLab API error: ${response.status} ${response.statusText}`);
+        }
+        const release = await response.json();
+        return {
+            assets: ((_b = (_a = release.assets) === null || _a === void 0 ? void 0 : _a.links) === null || _b === void 0 ? void 0 : _b.map((link) => ({
+                name: link.name,
+                url: link.url,
+                browser_download_url: link.url,
+            }))) || [],
+            tag_name: release.tag_name,
+        };
+    }
+    async validateAccess(owner, repo) {
+        const projectId = encodeURIComponent(`${owner}/${repo}`);
+        const response = await fetch(`${this.baseUrl}/projects/${projectId}`, {
+            headers: {
+                'Authorization': `Bearer ${this.token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw Error(`Can not find the '${repo}' repo. Please check your GitLab access permissions.`);
+            }
+            else {
+                throw Error(`GitLab API error: ${response.status} ${response.statusText}`);
+            }
+        }
+    }
+}
+function createScmProvider(config) {
+    switch (config.type) {
+        case "github":
+            return new GitHubProvider(config);
+        case "gitlab":
+            return new GitLabProvider(config);
+        default:
+            throw new Error(`Unsupported SCM type: ${config.type}`);
+    }
+}
+async function downloadScmBinary(scmProvider, owner, repo, tag, token) {
     const binaryName = repoToBinaryMap(repo);
     // Before downloading, check the cache.
     const pathInCache = toolCache.find(repo, tag);
@@ -13608,20 +13694,14 @@ async function downloadGitHubBinary(octokit, owner, repo, tag, token) {
         return { folder: pathInCache, name: binaryName };
     }
     core.info(`Downloading ${owner}/${repo} version ${tag}`);
-    const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({
-        owner,
-        repo,
-        tag,
-    });
+    const release = await scmProvider.getReleaseByTag(owner, repo, tag);
     const re = new RegExp(`${osPlatform()}.*${arch()}`);
-    const asset = getReleaseResponse.data.assets.find((obj) => re.test(obj.name));
+    const asset = release.assets.find((obj) => re.test(obj.name));
     if (!asset) {
         throw new Error(`Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`);
     }
-    // Use @actions/tool-cache to download the binary from GitHub
-    const downloadedPath = await toolCache.downloadTool(asset.url, 
-    // Don't set a destination path. It will default to a temporary one.
-    undefined, `token ${token}`, {
+    // Use @actions/tool-cache to download the binary
+    const downloadedPath = await toolCache.downloadTool(asset.browser_download_url || asset.url, undefined, `token ${token}`, {
         accept: "application/octet-stream",
     });
     core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
@@ -13637,7 +13717,7 @@ async function downloadGitHubBinary(octokit, owner, repo, tag, token) {
     core.debug(`Cached in ${cachedPath}`);
     return { folder: cachedPath, name: binaryName };
 }
-async function downloadAndSetupTooling(octokit, token) {
+async function downloadAndSetupTooling(scmProvider, token) {
     // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
     const tools = [
         {
@@ -13654,7 +13734,7 @@ async function downloadAndSetupTooling(octokit, token) {
         { org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION },
     ];
     for await (const { org, repo, version } of tools) {
-        const binary = await downloadGitHubBinary(octokit, org, repo, version, token);
+        const binary = await downloadScmBinary(scmProvider, org, repo, version, token);
         await setupBinaryInEnv(binary);
     }
 }
@@ -13771,26 +13851,16 @@ function parseCommitAuthor(commitAuthor) {
     }
     throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
 }
-async function validateAccessToPatcherCli(octokit) {
-    try {
-        await octokit.rest.repos.get({
-            owner: GRUNTWORK_GITHUB_ORG,
-            repo: PATCHER_GITHUB_REPO,
-        });
-    }
-    catch (error) {
-        if (error.message.includes("Not Found")) {
-            throw Error(`Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`);
-        }
-        else {
-            throw error;
-        }
-    }
+async function validateAccessToPatcherCli(scmProvider) {
+    await scmProvider.validateAccess(GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO);
 }
 async function run() {
     const gruntworkToken = core.getInput("github_token");
     const patcherReadToken = core.getInput("read_token");
     const patcherUpdateToken = core.getInput("update_token");
+    const scmBaseUrl = core.getInput("scm_base_url") || "https://github.com";
+    const scmType = (core.getInput("scm_type") || "github");
+    const scmApiVersion = core.getInput("scm_api_version") || (scmType === "gitlab" ? "v4" : "v3");
     const command = core.getInput("patcher_command");
     const updateStrategy = core.getInput("update_strategy");
     const dependency = core.getInput("dependency");
@@ -13812,9 +13882,15 @@ async function run() {
     core.setSecret(gruntworkToken);
     core.setSecret(readToken);
     core.setSecret(updateToken);
+    const scmConfig = {
+        baseUrl: scmBaseUrl,
+        type: scmType,
+        apiVersion: scmApiVersion,
+        token: gruntworkToken,
+    };
+    const scmProvider = createScmProvider(scmConfig);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
-    const octokit = github.getOctokit(gruntworkToken);
-    await validateAccessToPatcherCli(octokit);
+    await validateAccessToPatcherCli(scmProvider);
     // Validate if the 'patcher_command' provided is valid.
     if (!isPatcherCommandValid(command)) {
         throw new Error(`Invalid Patcher command ${command}`);
@@ -13823,7 +13899,7 @@ async function run() {
     // Validate if 'commit_author' has a valid format.
     const gitCommiter = parseCommitAuthor(commitAuthor);
     core.startGroup("Downloading Patcher and patch tools");
-    await downloadAndSetupTooling(octokit, gruntworkToken);
+    await downloadAndSetupTooling(scmProvider, gruntworkToken);
     core.endGroup();
     await runPatcher(gitCommiter, command, {
         specFile,

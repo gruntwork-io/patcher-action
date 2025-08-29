@@ -31,6 +31,9 @@ steps:
 | `patcher_version`        | Version of Patcher to use.                                                                                                                                                                               | `v0.15.1`                                      |
 | `terrapatch_github_repo` | GitHub repository to use for downloading terrapatch cli.                                                                                                                                                 | `terrapatch-cli`                               |
 | `terrapatch_version`     | Version of terrapatch to use.                                                                                                                                                                            | `v0.1.6`                                       |
+| `scm_base_url`           | Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise, 'https://gitlab.company.com' for GitLab).                                                                      | `https://github.com`                          |
+| `scm_type`               | Type of SCM provider. Valid options: 'github' or 'gitlab'.                                                                                                                                               | `github`                                       |
+| `scm_api_version`        | API version for the SCM provider. Defaults to 'v3' for GitHub, 'v4' for GitLab.                                                                                                                         | `v3` (GitHub) / `v4` (GitLab)                 |
 | `working_dir`            | Directory where Patcher should run. If empty, it will run in the whole repo.                                                                                                                             |                                                |
 | `update_strategy`        | Update strategy. Only used when running `update`. Valid options: `next-safe` or `next-breaking`. Refer to the ["Update Strategies" documentation](https://docs.gruntwork.io/patcher/update-strategies).  | `next-breaking`                                |
 | `include_dirs`           | List of directories to include using a double-star glob pattern. Only used when running `report`.                                                                                                        |                                                |
@@ -65,6 +68,44 @@ steps:
 > [!NOTE]
 > The repositories you select must have valid releases. They must use the same asset naming rules as the official
 > Gruntwork repos.
+
+### Using with GitHub Enterprise or GitLab
+
+The action supports GitHub Enterprise and GitLab instances in addition to GitHub.com. You can configure the SCM provider using these inputs:
+
+#### GitHub Enterprise Example
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: gruntwork-io/patcher-action@v2
+    with:
+      scm_base_url: "https://github.company.com"
+      scm_type: "github"
+      github_org: "my-org"
+      patcher_github_repo: "my-patcher-cli"
+      terrapatch_github_repo: "my-terrapatch-cli"
+      github_token: ${{ secrets.GITHUB_ENTERPRISE_TOKEN }}
+```
+
+#### GitLab Example
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: gruntwork-io/patcher-action@v2
+    with:
+      scm_base_url: "https://gitlab.company.com"
+      scm_type: "gitlab"
+      github_org: "my-group"
+      patcher_github_repo: "my-patcher-cli"
+      terrapatch_github_repo: "my-terrapatch-cli"
+      github_token: ${{ secrets.GITLAB_TOKEN }}
+```
+
+> [!NOTE]
+> - For GitHub Enterprise, use a Personal Access Token with appropriate repository permissions
+> - For GitLab, use a Personal Access Token or Project Access Token with `read_api` and `read_repository` scopes
+> - The `github_org` input represents the organization/group name in your SCM provider
+> - Repository names should match the naming conventions in your SCM provider
 
 ### Promotion Workflows
 
