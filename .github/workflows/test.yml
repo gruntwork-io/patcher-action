@@ -16,7 +16,7 @@ jobs:
         id: run-report
         uses: ./
         with:
-          github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
+          auth_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
           patcher_command: report
           working_dir: infrastructure-live
           spec_file: spec.json
@@ -44,10 +44,10 @@ jobs:
         id: run-update
         uses: ./
         with:
-          github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
+          auth_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
           patcher_command: update
           working_dir: infrastructure-live
           spec_file: spec.json
-          pull_request_title: "[Patcher] Update ${{ matrix.ID }}"
-          pull_request_branch: "patcher-updates-${{ matrix.ID }}"
+          pr_title: "[Patcher] Update ${{ matrix.ID }}"
+          pr_target_branch: "patcher-updates-${{ matrix.ID }}"
           dependency: ${{ matrix.ID }}

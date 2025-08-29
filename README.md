@@ -24,25 +24,25 @@ steps:
 
 | Name                     | Description                                                                                                                                                                                              | Default                                        |
 |--------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
-| `github_token`           | GitHub's Personal Access Token (PAT).                                                                                                                                                                    | `GITHUB_TOKEN`                                 |
-| `github_org`             | GitHub organization to use. Defaults to 'gruntwork-io'.                                                                                                                                                  | `gruntwork-io`                                 |
-| `patcher_command`        | Patcher command to run. Valid options: `update` or `report`.                                                                                                                                             | `update`                                       |
-| `patcher_github_repo`    | GitHub repository to use for downloading patcher cli. Defaults to 'patcher-cli'.                                                                                                                         | `patcher-cli`                                  |
-| `patcher_version`        | Version of Patcher to use.                                                                                                                                                                               | `v0.15.1`                                      |
-| `terrapatch_github_repo` | GitHub repository to use for downloading terrapatch cli.                                                                                                                                                 | `terrapatch-cli`                               |
-| `terrapatch_version`     | Version of terrapatch to use.                                                                                                                                                                            | `v0.1.6`                                       |
-| `scm_base_url`           | Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise, 'https://gitlab.company.com' for GitLab).                                                                      | `https://github.com`                          |
+| `auth_token`             | Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token. For GitLab, use a Personal Access Token or Project Access Token with appropriate permissions. | Required                                       |
 | `scm_type`               | Type of SCM provider. Valid options: 'github' or 'gitlab'.                                                                                                                                               | `github`                                       |
+| `scm_base_url`           | Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise, 'https://gitlab.company.com' for GitLab).                                                                      | `https://github.com`                          |
+| `scm_org`                | Organization/group name in your SCM provider.                                                                                                                                                            | `gruntwork-io`                                 |
 | `scm_api_version`        | API version for the SCM provider. Auto-detected based on scm_type if not specified (v3 for GitHub, v4 for GitLab).                                                                                      | Auto-detected                                  |
+| `patcher_command`        | Patcher command to run. Valid options: `update` or `report`.                                                                                                                                             | `update`                                       |
+| `patcher_git_repo`       | Repository name for downloading patcher cli.                                                                                                                                                             | `patcher-cli`                                  |
+| `patcher_version`        | Version of Patcher to use.                                                                                                                                                                               | `v0.15.1`                                      |
+| `terrapatch_git_repo`    | Repository name for downloading terrapatch cli.                                                                                                                                                          | `terrapatch-cli`                               |
+| `terrapatch_version`     | Version of terrapatch to use.                                                                                                                                                                            | `v0.1.6`                                       |
 | `working_dir`            | Directory where Patcher should run. If empty, it will run in the whole repo.                                                                                                                             |                                                |
 | `update_strategy`        | Update strategy. Only used when running `update`. Valid options: `next-safe` or `next-breaking`. Refer to the ["Update Strategies" documentation](https://docs.gruntwork.io/patcher/update-strategies).  | `next-breaking`                                |
 | `include_dirs`           | List of directories to include using a double-star glob pattern. Only used when running `report`.                                                                                                        |                                                |
 | `exclude_dirs`           | List of directories to exclude using a double-star glob pattern. Only used when running `report`.                                                                                                        |                                                |
 | `spec_file`              | Default name of the upgrade specification file. This is used by Patcher to restrict an upgrade to certain dependencies.                                                                                  | `spec.json`                                    |
 | `dependency`             | Limit the update to a single dependency. Only used when running `update`. Format: `<org>/<repo>/<name>`. Example: `gruntwork-io/terraform-aws-service-catalog/services/ecs-module`.                      |                                                |
-| `commit_author`          | Author of the Pull Request's commits in the format `Name <name@email.com>`. Only used when running `update`. The permissions to push the changes and to create the Pull Request are from 'github_token'. | `gruntwork-patcher-bot <patcher@gruntwork.io>` |
-| `pull_request_branch`    | Branch to use when creating the Pull Request. Required when running `update`.                                                                                                                            |                                                |
-| `pull_request_title`     | Title of the Pull Request. Only used when running `update`.                                                                                                                                              | `[Patcher] Update dependencies`                |
+| `commit_author`          | Author of the Pull Request's commits in the format `Name <name@email.com>`. Only used when running `update`. The permissions to push the changes and to create the Pull Request are from 'auth_token'. | `gruntwork-patcher-bot <patcher@gruntwork.io>` |
+| `pr_target_branch`       | Branch to use when creating the Pull Request. Required when running `update`.                                                                                                                            |                                                |
+| `pr_title`               | Title of the Pull Request. Only used when running `update`.                                                                                                                                              | `[Patcher] Update dependencies`                |
 | `dry_run`                | Simulate all operations using Patcher's dry-run mode. Useful for test workflows. Only used when running `update`.                                                                                        | `false`                                        |
 | `no_color`               | Whether to disable color output.                                                                                                                                                                         | `false`                                        |
 
@@ -60,9 +60,9 @@ steps:
   - uses: actions/checkout@v4
   - uses: gruntwork-io/patcher-action@v2
     with:
-      github_org: "my-org"                         # Use your organisation instead of gruntwork-io
-      patcher_github_repo: "my-patcher-cli"        # Use your fork name if it is different
-      terrapatch_github_repo: "my-terrapatch-cli"
+      scm_org: "my-org"                            # Use your organisation instead of gruntwork-io
+      patcher_git_repo: "my-patcher-cli"           # Use your fork name if it is different
+      terrapatch_git_repo: "my-terrapatch-cli"
 ```
 
 > [!NOTE]
@@ -81,10 +81,10 @@ steps:
     with:
       scm_base_url: "https://github.company.com"
       scm_type: "github"
-      github_org: "my-org"
-      patcher_github_repo: "my-patcher-cli"
-      terrapatch_github_repo: "my-terrapatch-cli"
-      github_token: ${{ secrets.GITHUB_ENTERPRISE_TOKEN }}
+      scm_org: "my-org"
+      patcher_git_repo: "my-patcher-cli"
+      terrapatch_git_repo: "my-terrapatch-cli"
+      auth_token: ${{ secrets.GITHUB_ENTERPRISE_TOKEN }}
 ```
 
 #### GitLab Example
@@ -95,16 +95,16 @@ steps:
     with:
       scm_base_url: "https://gitlab.company.com"
       scm_type: "gitlab"
-      github_org: "my-group"
-      patcher_github_repo: "my-patcher-cli"
-      terrapatch_github_repo: "my-terrapatch-cli"
-      github_token: ${{ secrets.GITLAB_TOKEN }}
+      scm_org: "my-group"
+      patcher_git_repo: "my-patcher-cli"
+      terrapatch_git_repo: "my-terrapatch-cli"
+      auth_token: ${{ secrets.GITLAB_TOKEN }}
 ```
 
 > [!NOTE]
 > - For GitHub Enterprise, use a Personal Access Token with appropriate repository permissions
 > - For GitLab, use a Personal Access Token or Project Access Token with `read_api` and `read_repository` scopes
-> - The `github_org` input represents the organization/group name in your SCM provider
+> - The `scm_org` input represents the organization/group name in your SCM provider
 > - Repository names should match the naming conventions in your SCM provider
 > - API versions are auto-detected (v3 for GitHub, v4 for GitLab) - no need to specify `scm_api_version` in most cases
 

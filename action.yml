@@ -7,42 +7,38 @@ branding:
   color: purple
 
 inputs:
-  github_token:
-    description: "GitHub's Personal Access Token (PAT). Used to authenticate usage of Patcher as an action."
-    default: ${{ github.token }}
-  github_org:
-    description: "GitHub organization to use. Defaults to 'gruntwork-io'."
-    required: false
-    default: "gruntwork-io"
-  scm_base_url:
-    description: "Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise, 'https://gitlab.company.com' for GitLab). Defaults to 'https://github.com' for GitHub.com."
-    required: false
-    default: "https://github.com"
+  auth_token:
+    description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token. For GitLab, use a Personal Access Token or Project Access Token with appropriate permissions."
+    required: true
   scm_type:
     description: "Type of SCM provider. Valid options: 'github' or 'gitlab'. Defaults to 'github'."
     required: false
     default: "github"
+  scm_base_url:
+    description: "Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise, 'https://gitlab.company.com' for GitLab). Defaults to 'https://github.com' for GitHub.com."
+    required: false
+    default: "https://github.com"
+  scm_org:
+    description: "Organization/group name in your SCM provider. Defaults to 'gruntwork-io'."
+    required: false
+    default: "gruntwork-io"
   scm_api_version:
     description: "API version for the SCM provider. Auto-detected based on scm_type if not specified (v3 for GitHub, v4 for GitLab)."
     required: false
     default: ""
-  read_token:
-    description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions. If left unset, github_token will be used."
-  update_token:
-    description: "Personal Access Token (PAT) used for 'update' to publish PRs against the relevant repo. If left unset, github_token will be used."
   patcher_command:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"
-  patcher_github_repo:
-    description: "GitHub repository to use for downloading patcher cli. Defaults to 'patcher-cli'."
+  patcher_git_repo:
+    description: "Repository name for downloading patcher cli. Defaults to 'patcher-cli'."
     required: false
-    default: patcher-cli
+    default: "patcher-cli"
   patcher_version:
     description: "Version of Patcher to use. Defaults to the v0.15.1 version."
     required: false
     default: "v0.15.1"
-  terrapatch_github_repo:
-    description: "GitHub repository to use for downloading terrapatch cli. Defaults to 'terrapatch-cli'."
+  terrapatch_git_repo:
+    description: "Repository name for downloading terrapatch cli. Defaults to 'terrapatch-cli'."
     required: false
     default: "terrapatch-cli"
   terrapatch_version:
@@ -74,12 +70,12 @@ inputs:
   commit_author:
     description: >
       "Author of the Pull Request's commits in the format 'Name <name@email.com>'. The permissions to push the changes
-      "and to create the Pull Request are from 'github_token'. Defaults to gruntwork-patcher-bot."
+      "and to create the Pull Request are from 'auth_token'. Defaults to gruntwork-patcher-bot."
     default: "gruntwork-patcher-bot <patcher@gruntwork.io>"
-  pull_request_branch:
+  pr_target_branch:
     description: "Branch where the Pull Request should be created. Required when 'update' is used."
     default: ""
-  pull_request_title:
+  pr_title:
     description: "Title of the Pull Request. Defaults to '[Patcher] Update dependencies'."
     default: "[Patcher] Update dependencies"
   dry_run:

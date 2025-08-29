@@ -9,10 +9,10 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 // Define constants
 
-const GRUNTWORK_GITHUB_ORG = core.getInput("github_org") || "gruntwork-io";
-const PATCHER_GITHUB_REPO = core.getInput("patcher_github_repo") || "patcher-cli";
+const GRUNTWORK_GITHUB_ORG = core.getInput("scm_org") || "gruntwork-io";
+const PATCHER_GITHUB_REPO = core.getInput("patcher_git_repo") || "patcher-cli";
 const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.1";
-const TERRAPATCH_GITHUB_REPO = core.getInput("terrapatch_github_repo") || "terrapatch-cli";
+const TERRAPATCH_GITHUB_REPO = core.getInput("terrapatch_git_repo") || "terrapatch-cli";
 const TERRAPATCH_VERSION = core.getInput("terrapatch_version") || "v0.1.6";
 
 const HCLEDIT_ORG = "minamijoyo";
@@ -513,11 +513,9 @@ async function validateAccessToPatcherCli(scmProvider: ScmProvider) {
 }
 
 export async function run() {
-  const gruntworkToken = core.getInput("github_token");
-  const patcherReadToken = core.getInput("read_token");
-  const patcherUpdateToken = core.getInput("update_token");
-  const scmBaseUrl = core.getInput("scm_base_url") || "https://github.com";
+  const authToken = core.getInput("auth_token");
   const scmType = (core.getInput("scm_type") || "github") as ScmType;
+  const scmBaseUrl = core.getInput("scm_base_url") || "https://github.com";
   const scmApiVersion = core.getInput("scm_api_version") || getDefaultApiVersion(scmType);
   const command = core.getInput("patcher_command");
   const updateStrategy = core.getInput("update_strategy");
@@ -527,27 +525,19 @@ export async function run() {
   const specFile = core.getInput("spec_file");
   const includeDirs = core.getInput("include_dirs");
   const excludeDirs = core.getInput("exclude_dirs");
-  const prBranch = core.getInput("pull_request_branch");
-  const prTitle = core.getInput("pull_request_title");
+  const prBranch = core.getInput("pr_target_branch");
+  const prTitle = core.getInput("pr_title");
   const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
 
-  // if the user didn't specify a token specifically for `patcher update`,
-  // that's ok, we can try to use the github token instead. doing this adoption
-  // is for back compatibility reasons
-  const readToken = patcherReadToken ? patcherReadToken : gruntworkToken;
-  const updateToken = patcherUpdateToken ? patcherUpdateToken : gruntworkToken;
-
   // Always mask the token strings in the logs.
-  core.setSecret(gruntworkToken);
-  core.setSecret(readToken);
-  core.setSecret(updateToken);
+  core.setSecret(authToken);
 
   const scmConfig: ScmConfig = {
     baseUrl: scmBaseUrl,
     type: scmType,
     apiVersion: scmApiVersion,
-    token: gruntworkToken,
+    token: authToken,
   };
 
   const scmProvider = createScmProvider(scmConfig);
@@ -565,7 +555,7 @@ export async function run() {
   const gitCommiter = parseCommitAuthor(commitAuthor);
 
   core.startGroup("Downloading Patcher and patch tools");
-  await downloadAndSetupTooling(scmProvider, gruntworkToken);
+  await downloadAndSetupTooling(scmProvider, authToken);
   core.endGroup();
 
   await runPatcher(gitCommiter, command, {
@@ -577,8 +567,8 @@ export async function run() {
     prTitle,
     dependency,
     workingDir,
-    readToken,
-    updateToken,
+    readToken: authToken,
+    updateToken: authToken,
     dryRun,
     noColor,
   });

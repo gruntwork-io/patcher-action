@@ -35,7 +35,7 @@ jobs:
       - uses: gruntwork-io/patcher-action@v2
         id: run-report
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          auth_token: ${{ secrets.GITHUB_TOKEN }}
           patcher_command: report
           working_dir: ./
           spec_file: spec.json
@@ -67,10 +67,10 @@ jobs:
       - uses: gruntwork-io/patcher-action@v2
         id: run-update
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          auth_token: ${{ secrets.GITHUB_TOKEN }}
           patcher_command: update
           working_dir: ./
           spec_file: spec.json
-          pull_request_title: "[Patcher] [stage] Update ${{ matrix.ID }}"
-          pull_request_branch: "patcher-stage-updates-${{ matrix.ID }}"
+          pr_title: "[Patcher] [stage] Update ${{ matrix.ID }}"
+          pr_target_branch: "patcher-stage-updates-${{ matrix.ID }}"
           dependency: ${{ matrix.ID }}
