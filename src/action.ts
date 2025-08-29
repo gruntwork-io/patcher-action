@@ -294,7 +294,7 @@ async function downloadScmBinary(
   const downloadedPath = await toolCache.downloadTool(
     asset.browser_download_url || asset.url,
     undefined,
-    `token ${token}`,
+    `Bearer ${token}`,
     {
       accept: "application/octet-stream",
     }

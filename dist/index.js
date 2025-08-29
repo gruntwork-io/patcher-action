@@ -13730,7 +13730,7 @@ async function downloadScmBinary(scmProvider, owner, repo, tag, token) {
         throw new Error(`Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`);
     }
     // Use @actions/tool-cache to download the binary
-    const downloadedPath = await toolCache.downloadTool(asset.browser_download_url || asset.url, undefined, `token ${token}`, {
+    const downloadedPath = await toolCache.downloadTool(asset.browser_download_url || asset.url, undefined, `Bearer ${token}`, {
         accept: "application/octet-stream",
     });
     core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
