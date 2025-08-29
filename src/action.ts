@@ -9,11 +9,12 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 // Define constants
 
-const GRUNTWORK_GITHUB_ORG = core.getInput("scm_org") || "gruntwork-io";
-const PATCHER_GITHUB_REPO = core.getInput("patcher_git_repo") || "patcher-cli";
+const PATCHER_ORG = core.getInput("scm_org") || "gruntwork-io";
+const PATCHER_GIT_REPO = core.getInput("patcher_git_repo") || "patcher-cli";
 const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.2";
-const TERRAPATCH_GITHUB_REPO = core.getInput("terrapatch_git_repo") || "terrapatch-cli";
+const TERRAPATCH_GIT_REPO = core.getInput("terrapatch_git_repo") || "terrapatch-cli";
 const TERRAPATCH_VERSION = core.getInput("terrapatch_version") || "v0.1.6";
+const TERRAPATCH_ORG = core.getInput("terrapatch_scm_org") || core.getInput("scm_org") || "gruntwork-io";
 
 const HCLEDIT_ORG = "minamijoyo";
 const TFUPDATE_GITHUB_REPO = "tfupdate";
@@ -52,8 +53,19 @@ interface ScmConfig {
   token: string;
 }
 
+interface ReleaseAsset {
+  name: string;
+  url: string;
+  browser_download_url?: string;
+}
+
+interface Release {
+  assets: ReleaseAsset[];
+  tag_name: string;
+}
+
 interface ScmProvider {
-  getReleaseByTag(owner: string, repo: string, tag: string): Promise<any>;
+  getReleaseByTag(owner: string, repo: string, tag: string): Promise<Release>;
   validateAccess(owner: string, repo: string): Promise<void>;
 }
 
@@ -142,7 +154,7 @@ class GitHubProvider implements ScmProvider {
     });
   }
 
-  async getReleaseByTag(owner: string, repo: string, tag: string): Promise<any> {
+  async getReleaseByTag(owner: string, repo: string, tag: string): Promise<Release> {
     try {
       const response = await this.octokit.rest.repos.getReleaseByTag({
         owner,
@@ -196,7 +208,7 @@ class GitLabProvider implements ScmProvider {
     this.token = config.token;
   }
 
-  async getReleaseByTag(owner: string, repo: string, tag: string): Promise<any> {
+  async getReleaseByTag(owner: string, repo: string, tag: string): Promise<Release> {
     const projectId = encodeURIComponent(`${owner}/${repo}`);
     const response = await fetch(`${this.baseUrl}/projects/${projectId}/releases/${tag}`, {
       headers: {
@@ -284,7 +296,7 @@ async function downloadScmBinary(
   const release = await scmProvider.getReleaseByTag(owner, repo, tag);
 
   const re = new RegExp(`${osPlatform()}.*${arch()}`);
-  const asset = release.assets.find((obj: any) => re.test(obj.name));
+  const asset = release.assets.find((obj: ReleaseAsset) => re.test(obj.name));
 
   if (!asset) {
     throw new Error(`Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`);
@@ -319,13 +331,13 @@ async function downloadAndSetupTooling(scmProvider: ScmProvider, token: string) 
   // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
   const tools = [
     {
-      org: GRUNTWORK_GITHUB_ORG,
-      repo: PATCHER_GITHUB_REPO,
+      org: PATCHER_ORG,
+      repo: PATCHER_GIT_REPO,
       version: PATCHER_VERSION,
     },
     {
-      org: GRUNTWORK_GITHUB_ORG,
-      repo: TERRAPATCH_GITHUB_REPO,
+      org: TERRAPATCH_ORG,
+      repo: TERRAPATCH_GIT_REPO,
       version: TERRAPATCH_VERSION,
     },
     { org: HCLEDIT_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
@@ -527,7 +539,7 @@ function parseCommitAuthor(commitAuthor: string): GitCommitter {
 }
 
 async function validateAccessToPatcherCli(scmProvider: ScmProvider) {
-  await scmProvider.validateAccess(GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO);
+  await scmProvider.validateAccess(PATCHER_ORG, PATCHER_GIT_REPO);
 }
 
 export async function run() {

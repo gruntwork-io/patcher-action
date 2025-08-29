@@ -13533,11 +13533,12 @@ const toolCache = __importStar(__nccwpck_require__(7784));
 const core = __importStar(__nccwpck_require__(2186));
 const exec = __importStar(__nccwpck_require__(1514));
 // Define constants
-const GRUNTWORK_GITHUB_ORG = core.getInput("scm_org") || "gruntwork-io";
-const PATCHER_GITHUB_REPO = core.getInput("patcher_git_repo") || "patcher-cli";
+const PATCHER_ORG = core.getInput("scm_org") || "gruntwork-io";
+const PATCHER_GIT_REPO = core.getInput("patcher_git_repo") || "patcher-cli";
 const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.2";
-const TERRAPATCH_GITHUB_REPO = core.getInput("terrapatch_git_repo") || "terrapatch-cli";
+const TERRAPATCH_GIT_REPO = core.getInput("terrapatch_git_repo") || "terrapatch-cli";
 const TERRAPATCH_VERSION = core.getInput("terrapatch_version") || "v0.1.6";
+const TERRAPATCH_ORG = core.getInput("terrapatch_scm_org") || core.getInput("scm_org") || "gruntwork-io";
 const HCLEDIT_ORG = "minamijoyo";
 const TFUPDATE_GITHUB_REPO = "tfupdate";
 const TFUPDATE_VERSION = "v0.6.5";
@@ -13750,13 +13751,13 @@ async function downloadAndSetupTooling(scmProvider, token) {
     // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
     const tools = [
         {
-            org: GRUNTWORK_GITHUB_ORG,
-            repo: PATCHER_GITHUB_REPO,
+            org: PATCHER_ORG,
+            repo: PATCHER_GIT_REPO,
             version: PATCHER_VERSION,
         },
         {
-            org: GRUNTWORK_GITHUB_ORG,
-            repo: TERRAPATCH_GITHUB_REPO,
+            org: TERRAPATCH_ORG,
+            repo: TERRAPATCH_GIT_REPO,
             version: TERRAPATCH_VERSION,
         },
         { org: HCLEDIT_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
@@ -13881,7 +13882,7 @@ function parseCommitAuthor(commitAuthor) {
     throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
 }
 async function validateAccessToPatcherCli(scmProvider) {
-    await scmProvider.validateAccess(GRUNTWORK_GITHUB_ORG, PATCHER_GITHUB_REPO);
+    await scmProvider.validateAccess(PATCHER_ORG, PATCHER_GIT_REPO);
 }
 async function run() {
     const authToken = core.getInput("auth_token");

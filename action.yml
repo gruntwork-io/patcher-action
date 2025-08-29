@@ -45,6 +45,10 @@ inputs:
     description: "Version of terrapatch to use. Defaults to the v0.1.6 version."
     required: false
     default: "v0.1.6"
+  terrapatch_scm_org:
+    description: "Organization/group name for terrapatch repository in your SCM provider. Defaults to same as scm_org."
+    required: false
+    default: ""
   include_dirs:
     description: >
       "Include only directories matching the given double-star glob pattern. Only works for `report`."
