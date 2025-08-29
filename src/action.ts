@@ -140,12 +140,26 @@ class GitHubProvider implements ScmProvider {
   }
 
   async getReleaseByTag(owner: string, repo: string, tag: string): Promise<any> {
-    const response = await this.octokit.rest.repos.getReleaseByTag({
-      owner,
-      repo,
-      tag,
-    });
-    return response.data;
+    try {
+      const response = await this.octokit.rest.repos.getReleaseByTag({
+        owner,
+        repo,
+        tag,
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.status === 404) {
+        throw new Error(
+          `Release '${tag}' not found in repository '${owner}/${repo}'. Please check the repository exists and the tag is correct.`
+        );
+      } else if (error.status === 401 || error.status === 403) {
+        throw new Error(
+          `Authentication failed when accessing '${owner}/${repo}'. Please check your token permissions.`
+        );
+      } else {
+        throw error;
+      }
+    }
   }
 
   async validateAccess(owner: string, repo: string): Promise<void> {
@@ -155,7 +169,13 @@ class GitHubProvider implements ScmProvider {
         repo,
       });
     } catch (error: any) {
-      if (error.message.includes("Not Found")) {
+      if (error.status === 404 || error.message.includes("Not Found")) {
+        if (owner === "gruntwork-io") {
+          core.warning(
+            `Cannot validate access to '${owner}/${repo}' repository. This may be due to token permissions. Proceeding with download attempt.`
+          );
+          return;
+        }
         throw Error(`Can not find the '${repo}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`);
       } else {
         throw error;
