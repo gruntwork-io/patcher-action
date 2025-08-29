@@ -196,8 +196,12 @@ async function downloadAndSetupTooling(octokit: GitHub, token: string) {
     { org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION },
   ];
 
-  for await (const { org, repo, version } of tools) {
-    const binary = await downloadGitHubBinary(octokit, org, repo, version, token);
+  const downloadPromises = tools.map(({ org, repo, version }) =>
+    downloadGitHubBinary(octokit, org, repo, version, token)
+  );
+  const binaries = await Promise.all(downloadPromises);
+
+  for (const binary of binaries) {
     await setupBinaryInEnv(binary);
   }
 }
