@@ -23,7 +23,7 @@ inputs:
     required: false
     default: "github"
   scm_api_version:
-    description: "API version for the SCM provider. Defaults to 'v3' for GitHub, 'v4' for GitLab."
+    description: "API version for the SCM provider. Auto-detected based on scm_type if not specified (v3 for GitHub, v4 for GitLab)."
     required: false
     default: ""
   read_token:

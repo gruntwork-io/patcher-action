@@ -33,7 +33,7 @@ steps:
 | `terrapatch_version`     | Version of terrapatch to use.                                                                                                                                                                            | `v0.1.6`                                       |
 | `scm_base_url`           | Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise, 'https://gitlab.company.com' for GitLab).                                                                      | `https://github.com`                          |
 | `scm_type`               | Type of SCM provider. Valid options: 'github' or 'gitlab'.                                                                                                                                               | `github`                                       |
-| `scm_api_version`        | API version for the SCM provider. Defaults to 'v3' for GitHub, 'v4' for GitLab.                                                                                                                         | `v3` (GitHub) / `v4` (GitLab)                 |
+| `scm_api_version`        | API version for the SCM provider. Auto-detected based on scm_type if not specified (v3 for GitHub, v4 for GitLab).                                                                                      | Auto-detected                                  |
 | `working_dir`            | Directory where Patcher should run. If empty, it will run in the whole repo.                                                                                                                             |                                                |
 | `update_strategy`        | Update strategy. Only used when running `update`. Valid options: `next-safe` or `next-breaking`. Refer to the ["Update Strategies" documentation](https://docs.gruntwork.io/patcher/update-strategies).  | `next-breaking`                                |
 | `include_dirs`           | List of directories to include using a double-star glob pattern. Only used when running `report`.                                                                                                        |                                                |
@@ -106,6 +106,7 @@ steps:
 > - For GitLab, use a Personal Access Token or Project Access Token with `read_api` and `read_repository` scopes
 > - The `github_org` input represents the organization/group name in your SCM provider
 > - Repository names should match the naming conventions in your SCM provider
+> - API versions are auto-detected (v3 for GitHub, v4 for GitLab) - no need to specify `scm_api_version` in most cases
 
 ### Promotion Workflows
 

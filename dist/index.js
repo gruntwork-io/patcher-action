@@ -13602,7 +13602,7 @@ async function setupBinaryInEnv(binary) {
 class GitHubProvider {
     constructor(config) {
         this.octokit = github.getOctokit(config.token, {
-            baseUrl: config.baseUrl === "https://github.com" ? undefined : `${config.baseUrl}/api/${config.apiVersion}`
+            baseUrl: config.baseUrl === "https://github.com" ? undefined : `${config.baseUrl}/api/${config.apiVersion}`,
         });
     }
     async getReleaseByTag(owner, repo, tag) {
@@ -13640,8 +13640,8 @@ class GitLabProvider {
         const projectId = encodeURIComponent(`${owner}/${repo}`);
         const response = await fetch(`${this.baseUrl}/projects/${projectId}/releases/${tag}`, {
             headers: {
-                'Authorization': `Bearer ${this.token}`,
-                'Content-Type': 'application/json',
+                Authorization: `Bearer ${this.token}`,
+                "Content-Type": "application/json",
             },
         });
         if (!response.ok) {
@@ -13661,8 +13661,8 @@ class GitLabProvider {
         const projectId = encodeURIComponent(`${owner}/${repo}`);
         const response = await fetch(`${this.baseUrl}/projects/${projectId}`, {
             headers: {
-                'Authorization': `Bearer ${this.token}`,
-                'Content-Type': 'application/json',
+                Authorization: `Bearer ${this.token}`,
+                "Content-Type": "application/json",
             },
         });
         if (!response.ok) {
@@ -13673,6 +13673,16 @@ class GitLabProvider {
                 throw Error(`GitLab API error: ${response.status} ${response.statusText}`);
             }
         }
+    }
+}
+function getDefaultApiVersion(scmType) {
+    switch (scmType) {
+        case "github":
+            return "v3";
+        case "gitlab":
+            return "v4";
+        default:
+            throw new Error(`Unsupported SCM type: ${scmType}`);
     }
 }
 function createScmProvider(config) {
@@ -13860,7 +13870,7 @@ async function run() {
     const patcherUpdateToken = core.getInput("update_token");
     const scmBaseUrl = core.getInput("scm_base_url") || "https://github.com";
     const scmType = (core.getInput("scm_type") || "github");
-    const scmApiVersion = core.getInput("scm_api_version") || (scmType === "gitlab" ? "v4" : "v3");
+    const scmApiVersion = core.getInput("scm_api_version") || getDefaultApiVersion(scmType);
     const command = core.getInput("patcher_command");
     const updateStrategy = core.getInput("update_strategy");
     const dependency = core.getInput("dependency");

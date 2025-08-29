@@ -218,6 +218,17 @@ class GitLabProvider implements ScmProvider {
   }
 }
 
+function getDefaultApiVersion(scmType: ScmType): string {
+  switch (scmType) {
+    case "github":
+      return "v3";
+    case "gitlab":
+      return "v4";
+    default:
+      throw new Error(`Unsupported SCM type: ${scmType}`);
+  }
+}
+
 function createScmProvider(config: ScmConfig): ScmProvider {
   switch (config.type) {
     case "github":
@@ -507,7 +518,7 @@ export async function run() {
   const patcherUpdateToken = core.getInput("update_token");
   const scmBaseUrl = core.getInput("scm_base_url") || "https://github.com";
   const scmType = (core.getInput("scm_type") || "github") as ScmType;
-  const scmApiVersion = core.getInput("scm_api_version") || (scmType === "gitlab" ? "v4" : "v3");
+  const scmApiVersion = core.getInput("scm_api_version") || getDefaultApiVersion(scmType);
   const command = core.getInput("patcher_command");
   const updateStrategy = core.getInput("update_strategy");
   const dependency = core.getInput("dependency");
