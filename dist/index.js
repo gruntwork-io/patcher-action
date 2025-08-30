@@ -13642,7 +13642,7 @@ class GitHubProvider {
                     core.warning(`Cannot validate access to '${owner}/${repo}' repository. This may be due to token permissions or repository visibility. Proceeding with download attempt.`);
                     return;
                 }
-                throw Error(`Can not find the '${repo}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`);
+                throw Error(`Cannot access the '${repo}' repository. This could indicate: 1) The repository doesn't exist, 2) Your token doesn't have access to this repository, or 3) Your token lacks the 'repo' scope for private repositories. Please check your token permissions and repository access. If you continue to have issues and are a Gruntwork customer, contact support@gruntwork.io.`);
             }
             else {
                 throw error;
