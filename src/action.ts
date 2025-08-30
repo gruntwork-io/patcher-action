@@ -185,9 +185,9 @@ class GitHubProvider implements ScmProvider {
       });
     } catch (error: any) {
       if (error.status === 404 || error.message.includes("Not Found")) {
-        if (owner === "gruntwork-io") {
+        if (owner !== "gruntwork-io") {
           core.warning(
-            `Cannot validate access to '${owner}/${repo}' repository. This may be due to token permissions. Proceeding with download attempt.`
+            `Cannot validate access to '${owner}/${repo}' repository. This may be due to token permissions or repository visibility. Proceeding with download attempt.`
           );
           return;
         }

@@ -13638,8 +13638,8 @@ class GitHubProvider {
         }
         catch (error) {
             if (error.status === 404 || error.message.includes("Not Found")) {
-                if (owner === "gruntwork-io") {
-                    core.warning(`Cannot validate access to '${owner}/${repo}' repository. This may be due to token permissions. Proceeding with download attempt.`);
+                if (owner !== "gruntwork-io") {
+                    core.warning(`Cannot validate access to '${owner}/${repo}' repository. This may be due to token permissions or repository visibility. Proceeding with download attempt.`);
                     return;
                 }
                 throw Error(`Can not find the '${repo}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`);
