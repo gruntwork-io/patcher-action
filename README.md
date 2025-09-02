@@ -59,7 +59,7 @@ steps:
   - uses: actions/checkout@v4
   - uses: gruntwork-io/patcher-action@v2
     with:
-      scm_org: "my-org"                            # Use your organisation instead of gruntwork-io
+      github_org: "my-org"                         # Use your organisation instead of gruntwork-io
       patcher_git_repo: "my-patcher-cli"           # Use your fork name if it is different
       terrapatch_git_repo: "my-terrapatch-cli"
 ```
