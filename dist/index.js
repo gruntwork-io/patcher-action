@@ -13651,70 +13651,8 @@ class GitHubProvider {
         }
     }
 }
-class GitLabProvider {
-    constructor(config) {
-        this.baseUrl = `${config.baseUrl}/api/${config.apiVersion}`;
-        this.token = config.token;
-    }
-    async getReleaseByTag(owner, repo, tag) {
-        var _a, _b;
-        const projectId = encodeURIComponent(`${owner}/${repo}`);
-        const response = await fetch(`${this.baseUrl}/projects/${projectId}/releases/${tag}`, {
-            headers: {
-                Authorization: `Bearer ${this.token}`,
-                "Content-Type": "application/json",
-            },
-        });
-        if (!response.ok) {
-            throw new Error(`GitLab API error: ${response.status} ${response.statusText}`);
-        }
-        const release = await response.json();
-        return {
-            assets: ((_b = (_a = release.assets) === null || _a === void 0 ? void 0 : _a.links) === null || _b === void 0 ? void 0 : _b.map((link) => ({
-                name: link.name,
-                url: link.url,
-                browser_download_url: link.url,
-            }))) || [],
-            tag_name: release.tag_name,
-        };
-    }
-    async validateAccess(owner, repo) {
-        const projectId = encodeURIComponent(`${owner}/${repo}`);
-        const response = await fetch(`${this.baseUrl}/projects/${projectId}`, {
-            headers: {
-                Authorization: `Bearer ${this.token}`,
-                "Content-Type": "application/json",
-            },
-        });
-        if (!response.ok) {
-            if (response.status === 404) {
-                throw Error(`Can not find the '${repo}' repo. Please check your GitLab access permissions.`);
-            }
-            else {
-                throw Error(`GitLab API error: ${response.status} ${response.statusText}`);
-            }
-        }
-    }
-}
-function getDefaultApiVersion(scmType) {
-    switch (scmType) {
-        case "github":
-            return "v3";
-        case "gitlab":
-            return "v4";
-        default:
-            throw new Error(`Unsupported SCM type: ${scmType}`);
-    }
-}
 function createScmProvider(config) {
-    switch (config.type) {
-        case "github":
-            return new GitHubProvider(config);
-        case "gitlab":
-            return new GitLabProvider(config);
-        default:
-            throw new Error(`Unsupported SCM type: ${config.type}`);
-    }
+    return new GitHubProvider(config);
 }
 function isGruntworkTool(org) {
     return org === PATCHER_ORG || org === TERRAPATCH_ORG;
@@ -13891,9 +13829,7 @@ async function validateAccessToPatcherCli(scmProvider) {
 }
 async function run() {
     const authToken = core.getInput("auth_token");
-    const scmType = (core.getInput("scm_type") || "github");
     const scmBaseUrl = core.getInput("scm_base_url") || "https://github.com";
-    const scmApiVersion = core.getInput("scm_api_version") || getDefaultApiVersion(scmType);
     const command = core.getInput("patcher_command");
     const updateStrategy = core.getInput("update_strategy");
     const dependency = core.getInput("dependency");
@@ -13910,14 +13846,12 @@ async function run() {
     core.setSecret(authToken);
     const scmConfig = {
         baseUrl: scmBaseUrl,
-        type: scmType,
-        apiVersion: scmApiVersion,
+        apiVersion: "v3",
         token: authToken,
     };
     const userScmProvider = createScmProvider(scmConfig);
     const githubComConfig = {
         baseUrl: "https://github.com",
-        type: "github",
         apiVersion: "v3",
         token: authToken,
     };

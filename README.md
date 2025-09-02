@@ -24,11 +24,9 @@ steps:
 
 | Name                     | Description                                                                                                                                                                                              | Default                                        |
 |--------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
-| `auth_token`             | Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token. For GitLab, use a Personal Access Token or Project Access Token with appropriate permissions. | Required                                       |
-| `scm_type`               | Type of SCM provider. Valid options: 'github' or 'gitlab'.                                                                                                                                               | `github`                                       |
-| `scm_base_url`           | Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise, 'https://gitlab.company.com' for GitLab).                                                                      | `https://github.com`                          |
+| `auth_token`             | Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions. | Required                                       |
+| `scm_base_url`           | Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com.                                                                      | `https://github.com`                          |
 | `scm_org`                | Organization/group name in your SCM provider.                                                                                                                                                            | `gruntwork-io`                                 |
-| `scm_api_version`        | API version for the SCM provider. Auto-detected based on scm_type if not specified (v3 for GitHub, v4 for GitLab).                                                                                      | Auto-detected                                  |
 | `patcher_command`        | Patcher command to run. Valid options: `update` or `report`.                                                                                                                                             | `update`                                       |
 | `patcher_git_repo`       | Repository name for downloading patcher cli.                                                                                                                                                             | `patcher-cli`                                  |
 | `patcher_version`        | Version of Patcher to use.                                                                                                                                                                               | `v0.15.2`                                      |
@@ -70,9 +68,9 @@ steps:
 > The repositories you select must have valid releases. They must use the same asset naming rules as the official
 > Gruntwork repos.
 
-### Using with GitHub Enterprise or GitLab
+### Using with GitHub Enterprise
 
-The action supports GitHub Enterprise and GitLab instances in addition to GitHub.com. You can configure the SCM provider using these inputs:
+The action supports GitHub Enterprise instances in addition to GitHub.com. You can configure the SCM provider using these inputs:
 
 #### GitHub Enterprise Example
 ```yaml
@@ -81,33 +79,16 @@ steps:
   - uses: gruntwork-io/patcher-action@v2
     with:
       scm_base_url: "https://github.company.com"
-      scm_type: "github"
       scm_org: "my-org"
       patcher_git_repo: "my-patcher-cli"
       terrapatch_git_repo: "my-terrapatch-cli"
       auth_token: ${{ secrets.GITHUB_ENTERPRISE_TOKEN }}
 ```
 
-#### GitLab Example
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: gruntwork-io/patcher-action@v2
-    with:
-      scm_base_url: "https://gitlab.company.com"
-      scm_type: "gitlab"
-      scm_org: "my-group"
-      patcher_git_repo: "my-patcher-cli"
-      terrapatch_git_repo: "my-terrapatch-cli"
-      auth_token: ${{ secrets.GITLAB_TOKEN }}
-```
-
 > [!NOTE]
 > - For GitHub Enterprise, use a Personal Access Token with appropriate repository permissions
-> - For GitLab, use a Personal Access Token or Project Access Token with `read_api` and `read_repository` scopes
 > - The `scm_org` input represents the organization/group name in your SCM provider
 > - Repository names should match the naming conventions in your SCM provider
-> - API versions are auto-detected (v3 for GitHub, v4 for GitLab) - no need to specify `scm_api_version` in most cases
 
 ### Promotion Workflows
 

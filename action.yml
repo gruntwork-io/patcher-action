@@ -8,24 +8,16 @@ branding:
 
 inputs:
   auth_token:
-    description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token. For GitLab, use a Personal Access Token or Project Access Token with appropriate permissions."
+    description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions."
     required: true
-  scm_type:
-    description: "Type of SCM provider. Valid options: 'github' or 'gitlab'. Defaults to 'github'."
-    required: false
-    default: "github"
   scm_base_url:
-    description: "Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise, 'https://gitlab.company.com' for GitLab). Defaults to 'https://github.com' for GitHub.com."
+    description: "Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
     required: false
     default: "https://github.com"
   scm_org:
     description: "Organization/group name in your SCM provider. Defaults to 'gruntwork-io'."
     required: false
     default: "gruntwork-io"
-  scm_api_version:
-    description: "API version for the SCM provider. Auto-detected based on scm_type if not specified (v3 for GitHub, v4 for GitLab)."
-    required: false
-    default: ""
   patcher_command:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"
