@@ -480,10 +480,15 @@ async function validateAccessToPatcherCli(githubProvider: GitHubProviderInterfac
 
 export async function run() {
   const githubToken = core.getInput("github_token") || core.getInput("auth_token");
+  const patcherReadToken = core.getInput("read_token");
+  const patcherUpdateToken = core.getInput("update_token");
 
   if (!githubToken) {
     throw new Error("Either 'github_token' or 'auth_token' input is required");
   }
+
+  const readToken = patcherReadToken || githubToken;
+  const updateToken = patcherUpdateToken || githubToken;
   const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
   const command = core.getInput("patcher_command");
   const updateStrategy = core.getInput("update_strategy");
@@ -500,6 +505,8 @@ export async function run() {
 
   // Always mask the token strings in the logs.
   core.setSecret(githubToken);
+  core.setSecret(readToken);
+  core.setSecret(updateToken);
 
   const githubConfig: GitHubConfig = {
     baseUrl: githubBaseUrl,
@@ -529,7 +536,7 @@ export async function run() {
   const gitCommiter = parseCommitAuthor(commitAuthor);
 
   core.startGroup("Downloading Patcher and patch tools");
-  await downloadAndSetupTooling(userGitHubProvider, githubComProvider, githubToken);
+  await downloadAndSetupTooling(userGitHubProvider, githubComProvider, readToken);
   core.endGroup();
 
   await runPatcher(gitCommiter, command, {
@@ -541,8 +548,8 @@ export async function run() {
     prTitle,
     dependency,
     workingDir,
-    readToken: githubToken,
-    updateToken: githubToken,
+    readToken,
+    updateToken,
     dryRun,
     noColor,
   });

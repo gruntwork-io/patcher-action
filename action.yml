@@ -13,6 +13,12 @@ inputs:
   auth_token:
     description: "DEPRECATED: Use 'github_token' instead. Personal Access Token (PAT) used to download binaries and publish pull requests."
     required: false
+  read_token:
+    description: "Personal Access Token (PAT) used to read repositories and download binaries. If not provided, falls back to 'github_token'."
+    required: false
+  update_token:
+    description: "Personal Access Token (PAT) used to publish pull requests. If not provided, falls back to 'github_token'."
+    required: false
   github_base_url:
     description: "Base URL for GitHub (e.g., 'https://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
     required: false
