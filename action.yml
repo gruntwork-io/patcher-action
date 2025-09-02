@@ -10,12 +10,12 @@ inputs:
   auth_token:
     description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions."
     required: true
-  scm_base_url:
-    description: "Base URL for the SCM provider (e.g., 'https://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
+  github_base_url:
+    description: "Base URL for GitHub (e.g., 'https://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
     required: false
     default: "https://github.com"
-  scm_org:
-    description: "Organization/group name in your SCM provider. Defaults to 'gruntwork-io'."
+  github_org:
+    description: "Organization name in GitHub. Defaults to 'gruntwork-io'."
     required: false
     default: "gruntwork-io"
   patcher_command:
@@ -37,8 +37,8 @@ inputs:
     description: "Version of terrapatch to use. Defaults to the v0.1.6 version."
     required: false
     default: "v0.1.6"
-  terrapatch_scm_org:
-    description: "Organization/group name for terrapatch repository in your SCM provider. Defaults to same as scm_org."
+  terrapatch_github_org:
+    description: "Organization name for terrapatch repository in GitHub. Defaults to same as github_org."
     required: false
     default: ""
   include_dirs:

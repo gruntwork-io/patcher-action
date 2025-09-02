@@ -9,10 +9,10 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 // Define constants
 
-const PATCHER_ORG = core.getInput("scm_org") || "gruntwork-io";
+const PATCHER_ORG = core.getInput("github_org") || "gruntwork-io";
 const PATCHER_GIT_REPO = core.getInput("patcher_git_repo") || "patcher-cli";
 const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.2";
-const TERRAPATCH_ORG = core.getInput("terrapatch_scm_org") || core.getInput("scm_org") || "gruntwork-io";
+const TERRAPATCH_ORG = core.getInput("terrapatch_github_org") || core.getInput("github_org") || "gruntwork-io";
 const TERRAPATCH_GIT_REPO = core.getInput("terrapatch_git_repo") || "terrapatch-cli";
 const TERRAPATCH_VERSION = core.getInput("terrapatch_version") || "v0.1.6";
 const TFUPDATE_ORG = "minamijoyo";
@@ -44,7 +44,7 @@ const PR_BRANCH_FLAG = "--pr-branch";
 
 // Define types
 
-interface ScmConfig {
+interface GitHubConfig {
   baseUrl: string;
   apiVersion: string;
   token: string;
@@ -61,7 +61,7 @@ interface Release {
   tag_name: string;
 }
 
-interface ScmProvider {
+interface GitHubProviderInterface {
   getReleaseByTag(owner: string, repo: string, tag: string): Promise<Release>;
   validateAccess(owner: string, repo: string): Promise<void>;
 }
@@ -139,10 +139,10 @@ async function setupBinaryInEnv(binary: DownloadedBinary) {
   await exec.exec("chmod", ["+x", binaryPath]);
 }
 
-class GitHubProvider implements ScmProvider {
+class GitHubProvider implements GitHubProviderInterface {
   private octokit: GitHub;
 
-  constructor(config: ScmConfig) {
+  constructor(config: GitHubConfig) {
     this.octokit = github.getOctokit(config.token, {
       baseUrl:
         config.baseUrl === "https://github.com"
@@ -198,7 +198,7 @@ class GitHubProvider implements ScmProvider {
   }
 }
 
-function createScmProvider(config: ScmConfig): ScmProvider {
+function createGitHubProvider(config: GitHubConfig): GitHubProviderInterface {
   return new GitHubProvider(config);
 }
 
@@ -206,8 +206,8 @@ function isGruntworkTool(org: string): boolean {
   return org === PATCHER_ORG || org === TERRAPATCH_ORG;
 }
 
-async function downloadScmBinary(
-  scmProvider: ScmProvider,
+async function downloadGitHubBinary(
+  githubProvider: GitHubProviderInterface,
   owner: string,
   repo: string,
   tag: string,
@@ -224,7 +224,7 @@ async function downloadScmBinary(
 
   core.info(`Downloading ${owner}/${repo} version ${tag}`);
 
-  const release = await scmProvider.getReleaseByTag(owner, repo, tag);
+  const release = await githubProvider.getReleaseByTag(owner, repo, tag);
 
   const re = new RegExp(`${osPlatform()}.*${arch()}`);
   const asset = release.assets.find((obj: ReleaseAsset) => re.test(obj.name));
@@ -258,7 +258,11 @@ async function downloadScmBinary(
   return { folder: cachedPath, name: binaryName };
 }
 
-async function downloadAndSetupTooling(userScmProvider: ScmProvider, githubComProvider: ScmProvider, token: string) {
+async function downloadAndSetupTooling(
+  userGitHubProvider: GitHubProviderInterface,
+  githubComProvider: GitHubProviderInterface,
+  token: string
+) {
   // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
   const tools = [
     {
@@ -276,8 +280,8 @@ async function downloadAndSetupTooling(userScmProvider: ScmProvider, githubComPr
   ];
 
   for await (const { org, repo, version } of tools) {
-    const scmProvider = isGruntworkTool(org) ? userScmProvider : githubComProvider;
-    const binary = await downloadScmBinary(scmProvider, org, repo, version, token);
+    const githubProvider = isGruntworkTool(org) ? userGitHubProvider : githubComProvider;
+    const binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
     await setupBinaryInEnv(binary);
   }
 }
@@ -470,13 +474,13 @@ function parseCommitAuthor(commitAuthor: string): GitCommitter {
   throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
 }
 
-async function validateAccessToPatcherCli(scmProvider: ScmProvider) {
+async function validateAccessToPatcherCli(scmProvider: GitHubProviderInterface) {
   await scmProvider.validateAccess(PATCHER_ORG, PATCHER_GIT_REPO);
 }
 
 export async function run() {
   const authToken = core.getInput("auth_token");
-  const scmBaseUrl = core.getInput("scm_base_url") || "https://github.com";
+  const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
   const command = core.getInput("patcher_command");
   const updateStrategy = core.getInput("update_strategy");
   const dependency = core.getInput("dependency");
@@ -493,23 +497,23 @@ export async function run() {
   // Always mask the token strings in the logs.
   core.setSecret(authToken);
 
-  const scmConfig: ScmConfig = {
-    baseUrl: scmBaseUrl,
+  const githubConfig: GitHubConfig = {
+    baseUrl: githubBaseUrl,
     apiVersion: "v3",
     token: authToken,
   };
 
-  const userScmProvider = createScmProvider(scmConfig);
+  const userGitHubProvider = createGitHubProvider(githubConfig);
 
-  const githubComConfig: ScmConfig = {
+  const githubComConfig: GitHubConfig = {
     baseUrl: "https://github.com",
     apiVersion: "v3",
     token: authToken,
   };
-  const githubComProvider = createScmProvider(githubComConfig);
+  const githubComProvider = createGitHubProvider(githubComConfig);
 
   // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
-  await validateAccessToPatcherCli(userScmProvider);
+  await validateAccessToPatcherCli(userGitHubProvider);
 
   // Validate if the 'patcher_command' provided is valid.
   if (!isPatcherCommandValid(command)) {
@@ -521,7 +525,7 @@ export async function run() {
   const gitCommiter = parseCommitAuthor(commitAuthor);
 
   core.startGroup("Downloading Patcher and patch tools");
-  await downloadAndSetupTooling(userScmProvider, githubComProvider, authToken);
+  await downloadAndSetupTooling(userGitHubProvider, githubComProvider, authToken);
   core.endGroup();
 
   await runPatcher(gitCommiter, command, {
