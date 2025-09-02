@@ -372,7 +372,8 @@ function updateArgs(
 function getPatcherEnvVars(
   gitCommiter: GitCommitter,
   readToken: string,
-  updateToken: string
+  updateToken: string,
+  extra?: { [key: string]: string }
 ): { [key: string]: string } {
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
   // this is a workaround to get the version from the package.json file, since rootDir doesn't contain the package.json file
@@ -381,6 +382,7 @@ function getPatcherEnvVars(
 
   return {
     ...process.env,
+    ...(extra || {}),
     GITHUB_OAUTH_TOKEN: readToken,
     GITHUB_PUBLISH_TOKEN: updateToken,
     PATCHER_TELEMETRY_ID: telemetryId,
@@ -406,7 +408,8 @@ async function runPatcher(
     updateToken,
     dryRun,
     noColor,
-  }: PatcherCliArgs
+  }: PatcherCliArgs,
+  extraEnv?: { [key: string]: string }
 ): Promise<void> {
   switch (command) {
     case REPORT_COMMAND: {
@@ -415,7 +418,7 @@ async function runPatcher(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken),
+          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
         }
       );
       core.endGroup();
@@ -443,7 +446,7 @@ async function runPatcher(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken),
+          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
         }
       );
       core.endGroup();
@@ -503,6 +506,10 @@ export async function run() {
   const prTitle = core.getInput("pull_request_title");
   const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
+  const githubOrg = core.getInput("github_org") || "gruntwork-io";
+  const extraEnv: { [key: string]: string } = {};
+  if (githubBaseUrl) extraEnv.GITHUB_BASE_URL = githubBaseUrl;
+  if (githubOrg) extraEnv.GITHUB_ORG = githubOrg;
 
   // Always mask the token strings in the logs.
   core.setSecret(githubToken);

@@ -13762,13 +13762,14 @@ function updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, wor
     }
     return args.concat([workingDir]);
 }
-function getPatcherEnvVars(gitCommiter, readToken, updateToken) {
+function getPatcherEnvVars(gitCommiter, readToken, updateToken, extra) {
     const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
     // this is a workaround to get the version from the package.json file, since rootDir doesn't contain the package.json file
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const packageJson = __nccwpck_require__(4147);
     return {
         ...process.env,
+        ...(extra || {}),
         GITHUB_OAUTH_TOKEN: readToken,
         GITHUB_PUBLISH_TOKEN: updateToken,
         PATCHER_TELEMETRY_ID: telemetryId,
@@ -13777,12 +13778,12 @@ function getPatcherEnvVars(gitCommiter, readToken, updateToken) {
         PATCHER_ACTIONS_VERSION: `v${packageJson.version}`,
     };
 }
-async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, readToken, updateToken, dryRun, noColor, }) {
+async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, readToken, updateToken, dryRun, noColor, }, extraEnv) {
     switch (command) {
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
             const reportOutput = await exec.getExecOutput("patcher", reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor), {
-                env: getPatcherEnvVars(gitCommiter, readToken, updateToken),
+                env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
             });
             core.endGroup();
             core.startGroup("Setting upgrade spec output");
@@ -13803,7 +13804,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             }
             core.startGroup(groupName);
             const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor), {
-                env: getPatcherEnvVars(gitCommiter, readToken, updateToken),
+                env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
             });
             core.endGroup();
             core.startGroup("Setting 'updateResult' output");
@@ -13850,6 +13851,12 @@ async function run() {
     const prTitle = core.getInput("pull_request_title");
     const dryRun = core.getBooleanInput("dry_run");
     const noColor = core.getBooleanInput("no_color");
+    const githubOrg = core.getInput("github_org") || "gruntwork-io";
+    const extraEnv = {};
+    if (githubBaseUrl)
+        extraEnv.GITHUB_BASE_URL = githubBaseUrl;
+    if (githubOrg)
+        extraEnv.GITHUB_ORG = githubOrg;
     // Always mask the token strings in the logs.
     core.setSecret(githubToken);
     core.setSecret(readToken);
