@@ -1,0 +1,322 @@
+name: Validate GitHub Access Token
+
+on:
+  workflow_dispatch:
+    inputs:
+      scm_base_url:
+        description: 'SCM Base URL (use https://github.com for GitHub.com or your GitHub Enterprise URL)'
+        required: true
+        default: 'https://github.com'
+        type: string
+      scm_org:
+        description: 'Organization name where your repositories are located'
+        required: true
+        default: 'gruntwork-io'
+        type: string
+      test_repo:
+        description: 'Repository name to test access (should be accessible with your token)'
+        required: true
+        default: 'patcher-cli'
+        type: string
+      test_version:
+        description: 'Release version to test (optional, defaults to latest)'
+        required: false
+        default: 'v0.15.2'
+        type: string
+      auth_token_secret:
+        description: 'Name of the secret containing your GitHub token (defaults to GITHUB_TOKEN)'
+        required: false
+        default: 'GITHUB_TOKEN'
+        type: string
+
+jobs:
+  validate-access:
+    name: Validate GitHub Access
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Validate Inputs
+        run: |
+          echo "🔍 Validating GitHub Access Token"
+          echo "=================================="
+          echo "SCM Base URL: ${{ inputs.scm_base_url }}"
+          echo "Organization: ${{ inputs.scm_org }}"
+          echo "Test Repository: ${{ inputs.test_repo }}"
+          echo "Test Version: ${{ inputs.test_version }}"
+          echo "Token Secret: ${{ inputs.auth_token_secret }}"
+          echo ""
+          
+          # Validate URL format
+          if [[ "${{ inputs.scm_base_url }}" != http* ]]; then
+            echo "❌ ERROR: SCM Base URL must start with http:// or https://"
+            exit 1
+          fi
+
+      - name: Test Repository Access
+        env:
+          GH_TOKEN: ${{ secrets[inputs.auth_token_secret] }}
+          SCM_BASE_URL: ${{ inputs.scm_base_url }}
+          SCM_ORG: ${{ inputs.scm_org }}
+          REPO_NAME: ${{ inputs.test_repo }}
+          TEST_VERSION: ${{ inputs.test_version }}
+        run: |
+          echo "🔍 Testing Repository Access"
+          echo "============================"
+          
+          # Check if token is provided
+          if [ -z "$GH_TOKEN" ]; then
+            echo "❌ ERROR: GitHub token not found in secrets.${{ inputs.auth_token_secret }}"
+            echo ""
+            echo "💡 SOLUTION: Add your GitHub token to repository secrets with name '${{ inputs.auth_token_secret }}'"
+            echo "   For GitHub.com: Create a Personal Access Token with 'repo' scope"
+            echo "   For GitHub Enterprise: Create a token with 'repo' scope on your enterprise instance"
+            exit 1
+          fi
+          
+          # Determine API URL (same logic as patcher-action)
+          if [ "$SCM_BASE_URL" = "https://github.com" ]; then
+            API_URL="https://api.github.com"
+            echo "🌐 Using GitHub.com API: $API_URL"
+          else
+            API_URL="${SCM_BASE_URL}/api/v3"
+            echo "🏢 Using GitHub Enterprise API: $API_URL"
+          fi
+          
+          echo ""
+          echo "📋 Testing access to: ${SCM_BASE_URL}/${SCM_ORG}/${REPO_NAME}"
+          
+          # Test repository access
+          response=$(curl -s -w "%{http_code}" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "User-Agent: patcher-action-validator" \
+            "${API_URL}/repos/${SCM_ORG}/${REPO_NAME}" \
+            -o /tmp/repo_response.json)
+          
+          http_code="${response: -3}"
+          echo "📡 Repository API Response: $http_code"
+          
+          if [ "$http_code" = "200" ]; then
+            echo "✅ SUCCESS: Repository access granted!"
+            echo ""
+            echo "📊 Repository Details:"
+            if command -v jq >/dev/null 2>&1; then
+              cat /tmp/repo_response.json | jq -r '"  Name: " + .name, "  Full Name: " + .full_name, "  Private: " + (.private | tostring), "  Default Branch: " + .default_branch'
+            else
+              echo "  (jq not available for detailed parsing)"
+            fi
+          elif [ "$http_code" = "404" ]; then
+            echo "❌ ERROR: Repository not found (404)"
+            echo ""
+            echo "💡 POSSIBLE CAUSES:"
+            echo "   1. Repository '${SCM_ORG}/${REPO_NAME}' does not exist"
+            echo "   2. Repository is private and your token doesn't have access"
+            echo "   3. Organization name '${SCM_ORG}' is incorrect"
+            echo "   4. Repository name '${REPO_NAME}' is incorrect"
+            echo ""
+            echo "🔧 SOLUTIONS:"
+            echo "   1. Verify the repository exists at: ${SCM_BASE_URL}/${SCM_ORG}/${REPO_NAME}"
+            echo "   2. Ensure your token has 'repo' scope for private repositories"
+            echo "   3. Check that you have access to the organization/repository"
+            echo ""
+            echo "📄 API Response:"
+            cat /tmp/repo_response.json
+            exit 1
+          elif [ "$http_code" = "401" ]; then
+            echo "❌ ERROR: Authentication failed (401)"
+            echo ""
+            echo "💡 POSSIBLE CAUSES:"
+            echo "   1. Invalid or expired GitHub token"
+            echo "   2. Token format is incorrect"
+            echo ""
+            echo "🔧 SOLUTIONS:"
+            echo "   1. Generate a new Personal Access Token"
+            echo "   2. Ensure token has 'repo' scope"
+            echo "   3. For GitHub Enterprise: Verify token was created on the correct instance"
+            echo ""
+            echo "📄 API Response:"
+            cat /tmp/repo_response.json
+            exit 1
+          elif [ "$http_code" = "403" ]; then
+            echo "❌ ERROR: Access forbidden (403)"
+            echo ""
+            echo "💡 POSSIBLE CAUSES:"
+            echo "   1. Token lacks required permissions (needs 'repo' scope)"
+            echo "   2. Organization has restricted access policies"
+            echo "   3. Repository access is restricted"
+            echo ""
+            echo "🔧 SOLUTIONS:"
+            echo "   1. Regenerate token with 'repo' scope"
+            echo "   2. Contact organization admin for repository access"
+            echo "   3. Verify you're a member of the organization"
+            echo ""
+            echo "📄 API Response:"
+            cat /tmp/repo_response.json
+            exit 1
+          else
+            echo "❌ ERROR: Unexpected response code ($http_code)"
+            echo ""
+            echo "💡 This might indicate:"
+            echo "   1. Network connectivity issues"
+            echo "   2. GitHub Enterprise server problems"
+            echo "   3. API endpoint changes"
+            echo ""
+            echo "📄 API Response:"
+            cat /tmp/repo_response.json
+            exit 1
+          fi
+
+      - name: Test Release Access
+        env:
+          GH_TOKEN: ${{ secrets[inputs.auth_token_secret] }}
+          SCM_BASE_URL: ${{ inputs.scm_base_url }}
+          SCM_ORG: ${{ inputs.scm_org }}
+          REPO_NAME: ${{ inputs.test_repo }}
+          TEST_VERSION: ${{ inputs.test_version }}
+        run: |
+          echo ""
+          echo "🔍 Testing Release Access"
+          echo "========================"
+          
+          # Determine API URL
+          if [ "$SCM_BASE_URL" = "https://github.com" ]; then
+            API_URL="https://api.github.com"
+          else
+            API_URL="${SCM_BASE_URL}/api/v3"
+          fi
+          
+          echo "📋 Testing release access for version: ${TEST_VERSION}"
+          
+          # Test release access
+          release_response=$(curl -s -w "%{http_code}" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "User-Agent: patcher-action-validator" \
+            "${API_URL}/repos/${SCM_ORG}/${REPO_NAME}/releases/tags/${TEST_VERSION}" \
+            -o /tmp/release_response.json)
+          
+          release_http_code="${release_response: -3}"
+          echo "📡 Release API Response: $release_http_code"
+          
+          if [ "$release_http_code" = "200" ]; then
+            echo "✅ SUCCESS: Release access granted!"
+            echo ""
+            echo "📊 Release Details:"
+            if command -v jq >/dev/null 2>&1; then
+              cat /tmp/release_response.json | jq -r '"  Tag: " + .tag_name, "  Name: " + .name, "  Published: " + .published_at, "  Assets: " + (.assets | length | tostring)'
+            else
+              echo "  (jq not available for detailed parsing)"
+            fi
+          elif [ "$release_http_code" = "404" ]; then
+            echo "⚠️  WARNING: Release not found (404)"
+            echo ""
+            echo "💡 This might mean:"
+            echo "   1. Version '${TEST_VERSION}' doesn't exist"
+            echo "   2. Release exists but is private/draft"
+            echo ""
+            echo "🔧 SOLUTIONS:"
+            echo "   1. Check available releases at: ${SCM_BASE_URL}/${SCM_ORG}/${REPO_NAME}/releases"
+            echo "   2. Try with a different version number"
+            echo "   3. This may not affect patcher-action if using latest releases"
+            echo ""
+            echo "📄 API Response:"
+            cat /tmp/release_response.json
+          else
+            echo "❌ ERROR: Release access failed ($release_http_code)"
+            echo ""
+            echo "💡 This could indicate permission issues with release assets"
+            echo ""
+            echo "📄 API Response:"
+            cat /tmp/release_response.json
+            exit 1
+          fi
+
+      - name: Test Token Permissions
+        env:
+          GH_TOKEN: ${{ secrets[inputs.auth_token_secret] }}
+          SCM_BASE_URL: ${{ inputs.scm_base_url }}
+        run: |
+          echo ""
+          echo "🔍 Testing Token Permissions"
+          echo "==========================="
+          
+          # Determine API URL
+          if [ "$SCM_BASE_URL" = "https://github.com" ]; then
+            API_URL="https://api.github.com"
+          else
+            API_URL="${SCM_BASE_URL}/api/v3"
+          fi
+          
+          echo "📋 Testing token user information access"
+          
+          # Test user/token info
+          user_response=$(curl -s -w "%{http_code}" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "User-Agent: patcher-action-validator" \
+            "${API_URL}/user" \
+            -o /tmp/user_response.json)
+          
+          user_http_code="${user_response: -3}"
+          echo "📡 User API Response: $user_http_code"
+          
+          if [ "$user_http_code" = "200" ]; then
+            echo "✅ SUCCESS: Token permissions validated!"
+            echo ""
+            echo "👤 Token Details:"
+            if command -v jq >/dev/null 2>&1; then
+              cat /tmp/user_response.json | jq -r '"  User: " + .login, "  Type: " + .type, "  Name: " + (.name // "Not set")'
+            else
+              echo "  (jq not available for detailed parsing)"
+            fi
+          elif [ "$user_http_code" = "403" ]; then
+            echo "⚠️  WARNING: Limited token permissions (403)"
+            echo ""
+            echo "💡 This means:"
+            echo "   1. Token works but has restricted user info access"
+            echo "   2. Common with GitHub App tokens or restricted PATs"
+            echo "   3. May still work for repository operations"
+            echo ""
+            echo "🔧 If patcher-action fails:"
+            echo "   1. Try using a Personal Access Token instead"
+            echo "   2. Ensure token has 'user' scope if user info is needed"
+            echo ""
+            echo "📄 API Response:"
+            cat /tmp/user_response.json
+          else
+            echo "❌ ERROR: Token validation failed ($user_http_code)"
+            echo ""
+            echo "💡 This indicates fundamental token issues"
+            echo ""
+            echo "📄 API Response:"
+            cat /tmp/user_response.json
+            exit 1
+          fi
+
+      - name: Validation Summary
+        if: always()
+        run: |
+          echo ""
+          echo "🎯 Validation Summary"
+          echo "===================="
+          echo ""
+          echo "✅ If all tests passed, your token should work with patcher-action!"
+          echo ""
+          echo "📋 Next Steps:"
+          echo "   1. Use the same token in your patcher-action workflow"
+          echo "   2. Use the same scm_base_url: ${{ inputs.scm_base_url }}"
+          echo "   3. Use the same scm_org: ${{ inputs.scm_org }}"
+          echo ""
+          echo "🔗 Example patcher-action usage:"
+          echo "   - name: Run Patcher"
+          echo "     uses: gruntwork-io/patcher-action@v2"
+          echo "     with:"
+          echo "       auth_token: \${{ secrets.${{ inputs.auth_token_secret }} }}"
+          echo "       scm_base_url: ${{ inputs.scm_base_url }}"
+          echo "       scm_org: ${{ inputs.scm_org }}"
+          echo "       patcher_command: report"
+          echo ""
+          echo "❓ If you encountered issues:"
+          echo "   1. Review the error messages above"
+          echo "   2. Check the Solutions sections for each failed test"
+          echo "   3. Contact support@gruntwork.io if you're a Gruntwork customer"
