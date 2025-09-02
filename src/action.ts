@@ -474,8 +474,8 @@ function parseCommitAuthor(commitAuthor: string): GitCommitter {
   throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
 }
 
-async function validateAccessToPatcherCli(scmProvider: GitHubProviderInterface) {
-  await scmProvider.validateAccess(PATCHER_ORG, PATCHER_GIT_REPO);
+async function validateAccessToPatcherCli(githubProvider: GitHubProviderInterface) {
+  await githubProvider.validateAccess(PATCHER_ORG, PATCHER_GIT_REPO);
 }
 
 export async function run() {
