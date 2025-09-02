@@ -13689,7 +13689,7 @@ async function downloadGitHubBinary(githubProvider, owner, repo, tag, token) {
     core.debug(`Cached in ${cachedPath}`);
     return { folder: cachedPath, name: binaryName };
 }
-async function downloadAndSetupTooling(userGitHubProvider, githubComProvider, token) {
+async function downloadAndSetupTooling(userGitHubProvider, githubComProvider, userToken) {
     // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
     const tools = [
         {
@@ -13707,6 +13707,7 @@ async function downloadAndSetupTooling(userGitHubProvider, githubComProvider, to
     ];
     for await (const { org, repo, version } of tools) {
         const githubProvider = isGruntworkTool(org) ? userGitHubProvider : githubComProvider;
+        const token = isGruntworkTool(org) ? userToken : "";
         const binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
         await setupBinaryInEnv(binary);
     }

@@ -261,7 +261,7 @@ async function downloadGitHubBinary(
 async function downloadAndSetupTooling(
   userGitHubProvider: GitHubProviderInterface,
   githubComProvider: GitHubProviderInterface,
-  token: string
+  userToken: string
 ) {
   // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
   const tools = [
@@ -281,6 +281,7 @@ async function downloadAndSetupTooling(
 
   for await (const { org, repo, version } of tools) {
     const githubProvider = isGruntworkTool(org) ? userGitHubProvider : githubComProvider;
+    const token = isGruntworkTool(org) ? userToken : "";
     const binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
     await setupBinaryInEnv(binary);
   }
