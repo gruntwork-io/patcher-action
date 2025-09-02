@@ -13715,6 +13715,9 @@ function createScmProvider(config) {
             throw new Error(`Unsupported SCM type: ${config.type}`);
     }
 }
+function isGruntworkTool(org) {
+    return org === PATCHER_ORG || org === TERRAPATCH_ORG;
+}
 async function downloadScmBinary(scmProvider, owner, repo, tag, token) {
     const binaryName = repoToBinaryMap(repo);
     // Before downloading, check the cache.
@@ -13747,7 +13750,7 @@ async function downloadScmBinary(scmProvider, owner, repo, tag, token) {
     core.debug(`Cached in ${cachedPath}`);
     return { folder: cachedPath, name: binaryName };
 }
-async function downloadAndSetupTooling(scmProvider, token) {
+async function downloadAndSetupTooling(userScmProvider, githubComProvider, token) {
     // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
     const tools = [
         {
@@ -13764,6 +13767,7 @@ async function downloadAndSetupTooling(scmProvider, token) {
         { org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION },
     ];
     for await (const { org, repo, version } of tools) {
+        const scmProvider = isGruntworkTool(org) ? userScmProvider : githubComProvider;
         const binary = await downloadScmBinary(scmProvider, org, repo, version, token);
         await setupBinaryInEnv(binary);
     }
@@ -13909,9 +13913,16 @@ async function run() {
         apiVersion: scmApiVersion,
         token: authToken,
     };
-    const scmProvider = createScmProvider(scmConfig);
+    const userScmProvider = createScmProvider(scmConfig);
+    const githubComConfig = {
+        baseUrl: "https://github.com",
+        type: "github",
+        apiVersion: "v3",
+        token: authToken,
+    };
+    const githubComProvider = createScmProvider(githubComConfig);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
-    await validateAccessToPatcherCli(scmProvider);
+    await validateAccessToPatcherCli(userScmProvider);
     // Validate if the 'patcher_command' provided is valid.
     if (!isPatcherCommandValid(command)) {
         throw new Error(`Invalid Patcher command ${command}`);
@@ -13920,7 +13931,7 @@ async function run() {
     // Validate if 'commit_author' has a valid format.
     const gitCommiter = parseCommitAuthor(commitAuthor);
     core.startGroup("Downloading Patcher and patch tools");
-    await downloadAndSetupTooling(scmProvider, authToken);
+    await downloadAndSetupTooling(userScmProvider, githubComProvider, authToken);
     core.endGroup();
     await runPatcher(gitCommiter, command, {
         specFile,

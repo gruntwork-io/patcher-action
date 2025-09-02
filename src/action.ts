@@ -277,6 +277,10 @@ function createScmProvider(config: ScmConfig): ScmProvider {
   }
 }
 
+function isGruntworkTool(org: string): boolean {
+  return org === PATCHER_ORG || org === TERRAPATCH_ORG;
+}
+
 async function downloadScmBinary(
   scmProvider: ScmProvider,
   owner: string,
@@ -329,7 +333,7 @@ async function downloadScmBinary(
   return { folder: cachedPath, name: binaryName };
 }
 
-async function downloadAndSetupTooling(scmProvider: ScmProvider, token: string) {
+async function downloadAndSetupTooling(userScmProvider: ScmProvider, githubComProvider: ScmProvider, token: string) {
   // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
   const tools = [
     {
@@ -347,6 +351,7 @@ async function downloadAndSetupTooling(scmProvider: ScmProvider, token: string) 
   ];
 
   for await (const { org, repo, version } of tools) {
+    const scmProvider = isGruntworkTool(org) ? userScmProvider : githubComProvider;
     const binary = await downloadScmBinary(scmProvider, org, repo, version, token);
     await setupBinaryInEnv(binary);
   }
@@ -572,10 +577,18 @@ export async function run() {
     token: authToken,
   };
 
-  const scmProvider = createScmProvider(scmConfig);
+  const userScmProvider = createScmProvider(scmConfig);
+
+  const githubComConfig: ScmConfig = {
+    baseUrl: "https://github.com",
+    type: "github",
+    apiVersion: "v3",
+    token: authToken,
+  };
+  const githubComProvider = createScmProvider(githubComConfig);
 
   // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
-  await validateAccessToPatcherCli(scmProvider);
+  await validateAccessToPatcherCli(userScmProvider);
 
   // Validate if the 'patcher_command' provided is valid.
   if (!isPatcherCommandValid(command)) {
@@ -587,7 +600,7 @@ export async function run() {
   const gitCommiter = parseCommitAuthor(commitAuthor);
 
   core.startGroup("Downloading Patcher and patch tools");
-  await downloadAndSetupTooling(scmProvider, authToken);
+  await downloadAndSetupTooling(userScmProvider, githubComProvider, authToken);
   core.endGroup();
 
   await runPatcher(gitCommiter, command, {
