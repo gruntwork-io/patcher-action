@@ -23,7 +23,7 @@ on:
         required: false
         default: 'v0.15.2'
         type: string
-      auth_token_secret:
+      github_token_secret:
         description: 'Name of the secret containing your GitHub token (defaults to GITHUB_TOKEN)'
         required: false
         default: 'GITHUB_TOKEN'
@@ -43,7 +43,7 @@ jobs:
           echo "Organization: ${{ inputs.github_org }}"
           echo "Test Repository: ${{ inputs.test_repo }}"
           echo "Test Version: ${{ inputs.test_version }}"
-          echo "Token Secret: ${{ inputs.auth_token_secret }}"
+          echo "Token Secret: ${{ inputs.github_token_secret }}"
           echo ""
           
           # Validate URL format
@@ -54,7 +54,7 @@ jobs:
 
       - name: Test Repository Access
         env:
-          GH_TOKEN: ${{ secrets[inputs.auth_token_secret] }}
+          GH_TOKEN: ${{ secrets[inputs.github_token_secret] }}
           GITHUB_BASE_URL: ${{ inputs.github_base_url }}
           GITHUB_ORG: ${{ inputs.github_org }}
           REPO_NAME: ${{ inputs.test_repo }}
@@ -65,9 +65,9 @@ jobs:
           
           # Check if token is provided
           if [ -z "$GH_TOKEN" ]; then
-            echo "❌ ERROR: GitHub token not found in secrets.${{ inputs.auth_token_secret }}"
+            echo "❌ ERROR: GitHub token not found in secrets.${{ inputs.github_token_secret }}"
             echo ""
-            echo "💡 SOLUTION: Add your GitHub token to repository secrets with name '${{ inputs.auth_token_secret }}'"
+            echo "💡 SOLUTION: Add your GitHub token to repository secrets with name '${{ inputs.github_token_secret }}'"
             echo "   For GitHub.com: Create a Personal Access Token with 'repo' scope"
             echo "   For GitHub Enterprise: Create a token with 'repo' scope on your enterprise instance"
             exit 1
@@ -168,7 +168,7 @@ jobs:
 
       - name: Test Release Access
         env:
-          GH_TOKEN: ${{ secrets[inputs.auth_token_secret] }}
+          GH_TOKEN: ${{ secrets[inputs.github_token_secret] }}
           GITHUB_BASE_URL: ${{ inputs.github_base_url }}
           GITHUB_ORG: ${{ inputs.github_org }}
           REPO_NAME: ${{ inputs.test_repo }}
@@ -233,7 +233,7 @@ jobs:
 
       - name: Test Token Permissions
         env:
-          GH_TOKEN: ${{ secrets[inputs.auth_token_secret] }}
+          GH_TOKEN: ${{ secrets[inputs.github_token_secret] }}
           GITHUB_BASE_URL: ${{ inputs.github_base_url }}
         run: |
           echo ""

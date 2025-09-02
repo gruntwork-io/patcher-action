@@ -50,7 +50,7 @@ jobs:
         id: run-report
         uses: ./
         with:
-          auth_token: ${{ secrets.PATCHER_FULL_REPO }}
+          github_token: ${{ secrets.PATCHER_FULL_REPO }}
           patcher_command: report
           patcher_version: v0.15.2
           working_dir: infrastructure-live
@@ -80,7 +80,7 @@ jobs:
         id: run-update
         uses: ./
         with:
-          auth_token: ${{ secrets.PATCHER_FULL_REPO }}
+          github_token: ${{ secrets.PATCHER_FULL_REPO }}
           patcher_command: update
           patcher_version: v0.15.2
           working_dir: infrastructure-live

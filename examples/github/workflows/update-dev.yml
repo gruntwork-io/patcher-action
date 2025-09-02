@@ -37,7 +37,7 @@ jobs:
       - uses: gruntwork-io/patcher-action@v2
         id: run-report
         with:
-          auth_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           patcher_command: report
           working_dir: ./
           spec_file: spec.json
@@ -69,7 +69,7 @@ jobs:
       - uses: gruntwork-io/patcher-action@v2
         id: run-update
         with:
-          auth_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           patcher_command: update
           working_dir: ./
           spec_file: spec.json

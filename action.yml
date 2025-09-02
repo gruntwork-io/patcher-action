@@ -7,9 +7,12 @@ branding:
   color: purple
 
 inputs:
-  auth_token:
+  github_token:
     description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions."
-    required: true
+    required: false
+  auth_token:
+    description: "DEPRECATED: Use 'github_token' instead. Personal Access Token (PAT) used to download binaries and publish pull requests."
+    required: false
   github_base_url:
     description: "Base URL for GitHub (e.g., 'https://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
     required: false
@@ -66,7 +69,7 @@ inputs:
   commit_author:
     description: >
       "Author of the Pull Request's commits in the format 'Name <name@email.com>'. The permissions to push the changes
-      "and to create the Pull Request are from 'auth_token'. Defaults to gruntwork-patcher-bot."
+      "and to create the Pull Request are from 'github_token'. Defaults to gruntwork-patcher-bot."
     default: "gruntwork-patcher-bot <patcher@gruntwork.io>"
   pr_target_branch:
     description: "Branch where the Pull Request should be created. Required when 'update' is used."

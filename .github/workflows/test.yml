@@ -16,7 +16,7 @@ jobs:
         id: run-report
         uses: ./
         with:
-          auth_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
+          github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
           patcher_command: report
           working_dir: infrastructure-live
           spec_file: spec.json
@@ -44,7 +44,7 @@ jobs:
         id: run-update
         uses: ./
         with:
-          auth_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
+          github_token: ${{ secrets.CI_READONLY_READ_TOKEN }}
           patcher_command: update
           working_dir: infrastructure-live
           spec_file: spec.json

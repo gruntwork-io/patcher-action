@@ -24,7 +24,8 @@ steps:
 
 | Name                     | Description                                                                                                                                                                                              | Default                                        |
 |--------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
-| `auth_token`             | Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions. | Required                                       |
+| `github_token`           | Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions. | Required                                       |
+| `auth_token`             | DEPRECATED: Use 'github_token' instead. Personal Access Token (PAT) used to download binaries and publish pull requests. | Required if github_token not provided          |
 | `github_base_url`        | Base URL for GitHub (e.g., 'https://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com.                                                                      | `https://github.com`                          |
 | `github_org`             | Organization name in GitHub.                                                                                                                                                            | `gruntwork-io`                                 |
 | `patcher_command`        | Patcher command to run. Valid options: `update` or `report`.                                                                                                                                             | `update`                                       |
@@ -39,7 +40,7 @@ steps:
 | `exclude_dirs`           | List of directories to exclude using a double-star glob pattern. Only used when running `report`.                                                                                                        |                                                |
 | `spec_file`              | Default name of the upgrade specification file. This is used by Patcher to restrict an upgrade to certain dependencies.                                                                                  | `spec.json`                                    |
 | `dependency`             | Limit the update to a single dependency. Only used when running `update`. Format: `<org>/<repo>/<name>`. Example: `gruntwork-io/terraform-aws-service-catalog/services/ecs-module`.                      |                                                |
-| `commit_author`          | Author of the Pull Request's commits in the format `Name <name@email.com>`. Only used when running `update`. The permissions to push the changes and to create the Pull Request are from 'auth_token'. | `gruntwork-patcher-bot <patcher@gruntwork.io>` |
+| `commit_author`          | Author of the Pull Request's commits in the format `Name <name@email.com>`. Only used when running `update`. The permissions to push the changes and to create the Pull Request are from 'github_token'. | `gruntwork-patcher-bot <patcher@gruntwork.io>` |
 | `pr_target_branch`       | Branch to use when creating the Pull Request. Required when running `update`.                                                                                                                            |                                                |
 | `pr_title`               | Title of the Pull Request. Only used when running `update`.                                                                                                                                              | `[Patcher] Update dependencies`                |
 | `dry_run`                | Simulate all operations using Patcher's dry-run mode. Useful for test workflows. Only used when running `update`.                                                                                        | `false`                                        |
@@ -82,7 +83,7 @@ steps:
       github_org: "my-org"
       patcher_git_repo: "my-patcher-cli"
       terrapatch_git_repo: "my-terrapatch-cli"
-      auth_token: ${{ secrets.GITHUB_ENTERPRISE_TOKEN }}
+      github_token: ${{ secrets.GITHUB_ENTERPRISE_TOKEN }}
 ```
 
 > [!NOTE]
