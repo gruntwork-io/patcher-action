@@ -10,9 +10,10 @@ inputs:
   github_token:
     description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions."
     required: false
-  auth_token:
-    description: "DEPRECATED: Use 'github_token' instead. Personal Access Token (PAT) used to download binaries and publish pull requests."
-    required: false
+  read_token:
+    description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions. If left unset, github_token will be used."
+  update_token:
+    description: "Personal Access Token (PAT) used for 'update' to publish PRs against the relevant repo. If left unset, github_token will be used."
   github_base_url:
     description: "Base URL for GitHub (e.g., 'https://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
     required: false
@@ -71,10 +72,10 @@ inputs:
       "Author of the Pull Request's commits in the format 'Name <name@email.com>'. The permissions to push the changes
       "and to create the Pull Request are from 'github_token'. Defaults to gruntwork-patcher-bot."
     default: "gruntwork-patcher-bot <patcher@gruntwork.io>"
-  pr_target_branch:
+  pull_request_branch:
     description: "Branch where the Pull Request should be created. Required when 'update' is used."
     default: ""
-  pr_title:
+  pull_request_title:
     description: "Title of the Pull Request. Defaults to '[Patcher] Update dependencies'."
     default: "[Patcher] Update dependencies"
   dry_run:
