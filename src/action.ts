@@ -12,13 +12,13 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 const PATCHER_ORG = core.getInput("scm_org") || "gruntwork-io";
 const PATCHER_GIT_REPO = core.getInput("patcher_git_repo") || "patcher-cli";
 const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.2";
+const TERRAPATCH_ORG = core.getInput("terrapatch_scm_org") || core.getInput("scm_org") || "gruntwork-io";
 const TERRAPATCH_GIT_REPO = core.getInput("terrapatch_git_repo") || "terrapatch-cli";
 const TERRAPATCH_VERSION = core.getInput("terrapatch_version") || "v0.1.6";
-const TERRAPATCH_ORG = core.getInput("terrapatch_scm_org") || core.getInput("scm_org") || "gruntwork-io";
-
-const HCLEDIT_ORG = "minamijoyo";
+const TFUPDATE_ORG = "minamijoyo";
 const TFUPDATE_GITHUB_REPO = "tfupdate";
 const TFUPDATE_VERSION = "v0.6.5";
+const HCLEDIT_ORG = "minamijoyo";
 const HCLEDIT_GITHUB_REPO = "hcledit";
 const HCLEDIT_VERSION = "v0.2.5";
 
@@ -346,7 +346,7 @@ async function downloadAndSetupTooling(userScmProvider: ScmProvider, githubComPr
       repo: TERRAPATCH_GIT_REPO,
       version: TERRAPATCH_VERSION,
     },
-    { org: HCLEDIT_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
+    { org: TFUPDATE_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
     { org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION },
   ];
 
