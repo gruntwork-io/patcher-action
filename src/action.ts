@@ -498,8 +498,8 @@ export async function run() {
   const specFile = core.getInput("spec_file");
   const includeDirs = core.getInput("include_dirs");
   const excludeDirs = core.getInput("exclude_dirs");
-  const prBranch = core.getInput("pr_target_branch");
-  const prTitle = core.getInput("pr_title");
+  const prBranch = core.getInput("pull_request_branch");
+  const prTitle = core.getInput("pull_request_title");
   const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
 
