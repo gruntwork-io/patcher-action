@@ -13828,7 +13828,10 @@ async function validateAccessToPatcherCli(githubProvider) {
     await githubProvider.validateAccess(PATCHER_ORG, PATCHER_GIT_REPO);
 }
 async function run() {
-    const authToken = core.getInput("auth_token");
+    const githubToken = core.getInput("github_token") || core.getInput("auth_token");
+    if (!githubToken) {
+        throw new Error("Either 'github_token' or 'auth_token' input is required");
+    }
     const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
     const command = core.getInput("patcher_command");
     const updateStrategy = core.getInput("update_strategy");
@@ -13843,17 +13846,17 @@ async function run() {
     const dryRun = core.getBooleanInput("dry_run");
     const noColor = core.getBooleanInput("no_color");
     // Always mask the token strings in the logs.
-    core.setSecret(authToken);
+    core.setSecret(githubToken);
     const githubConfig = {
         baseUrl: githubBaseUrl,
         apiVersion: "v3",
-        token: authToken,
+        token: githubToken,
     };
     const userGitHubProvider = createGitHubProvider(githubConfig);
     const githubComConfig = {
         baseUrl: "https://github.com",
         apiVersion: "v3",
-        token: authToken,
+        token: githubToken,
     };
     const githubComProvider = createGitHubProvider(githubComConfig);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
@@ -13866,7 +13869,7 @@ async function run() {
     // Validate if 'commit_author' has a valid format.
     const gitCommiter = parseCommitAuthor(commitAuthor);
     core.startGroup("Downloading Patcher and patch tools");
-    await downloadAndSetupTooling(userGitHubProvider, githubComProvider, authToken);
+    await downloadAndSetupTooling(userGitHubProvider, githubComProvider, githubToken);
     core.endGroup();
     await runPatcher(gitCommiter, command, {
         specFile,
@@ -13877,8 +13880,8 @@ async function run() {
         prTitle,
         dependency,
         workingDir,
-        readToken: authToken,
-        updateToken: authToken,
+        readToken: githubToken,
+        updateToken: githubToken,
         dryRun,
         noColor,
     });
