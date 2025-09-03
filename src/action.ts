@@ -619,8 +619,10 @@ async function runPatcher(
           GH_TOKEN: "",
         } as Record<string, string>;
         core.debug("GHES routing: preserving GHES PAT, stripping generic tokens.");
+        core.debug("Audit: Authorization to api.github.com will be disabled (no generic tokens exported).");
       } else {
         core.debug("GitHub.com routing: keeping tokens for CI; dotcom tokens are valid here.");
+        core.debug("Audit: Authorization to api.github.com may be sent by CI (tokens preserved).");
       }
       const masked = {
         GITHUB_OAUTH_TOKEN: envReport.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
@@ -643,7 +645,7 @@ async function runPatcher(
         PWD: process.cwd(),
         CWD: workingDir,
       } as Record<string, string>;
-      core.debug(`Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
+      core.debug(`Audit: Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
       core.debug(`Exec: patcher ${reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor).join(" ")}`);
       const reportOutput = await exec.getExecOutput(
         "patcher",
@@ -687,8 +689,10 @@ async function runPatcher(
           GH_TOKEN: "",
         } as Record<string, string>;
         core.debug("GHES routing: using update token; stripping generic tokens.");
+        core.debug("Audit: Authorization to api.github.com will be disabled (no generic tokens exported).");
       } else {
         core.debug("GitHub.com routing: keeping tokens for CI.");
+        core.debug("Audit: Authorization to api.github.com may be sent by CI (tokens preserved).");
       }
       const masked = {
         GITHUB_OAUTH_TOKEN: envUpdate.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
@@ -709,7 +713,7 @@ async function runPatcher(
         PWD: process.cwd(),
         CWD: workingDir,
       } as Record<string, string>;
-      core.debug(`Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
+      core.debug(`Audit: Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
       core.debug(
         `Exec: patcher ${updateArgs(
           specFile,
@@ -834,6 +838,9 @@ export async function run() {
     extraEnv.GH_HOST = host;
     extraEnv.GHE_HOST = host;
   }
+  core.debug(
+    `Audit: Routing base host=${extraEnv.GH_HOST || ""} | DotCom=${(extraEnv.GH_HOST || "").includes("github.com")}`
+  );
 
   core.debug(`Resolved GitHub endpoints:`);
   core.debug(`server=${resolvedServerUrl}, api=${resolvedApiUrl}, graphql=${resolvedGraphqlUrl}`);

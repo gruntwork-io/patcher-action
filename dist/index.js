@@ -13947,9 +13947,11 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
                     GH_TOKEN: "",
                 };
                 core.debug("GHES routing: preserving GHES PAT, stripping generic tokens.");
+                core.debug("Audit: Authorization to api.github.com will be disabled (no generic tokens exported).");
             }
             else {
                 core.debug("GitHub.com routing: keeping tokens for CI; dotcom tokens are valid here.");
+                core.debug("Audit: Authorization to api.github.com may be sent by CI (tokens preserved).");
             }
             const masked = {
                 GITHUB_OAUTH_TOKEN: envReport.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
@@ -13972,7 +13974,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
                 PWD: process.cwd(),
                 CWD: workingDir,
             };
-            core.debug(`Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
+            core.debug(`Audit: Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
             core.debug(`Exec: patcher ${reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor).join(" ")}`);
             const reportOutput = await exec.getExecOutput("patcher", reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor), {
                 env: envReport,
@@ -14008,9 +14010,11 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
                     GH_TOKEN: "",
                 };
                 core.debug("GHES routing: using update token; stripping generic tokens.");
+                core.debug("Audit: Authorization to api.github.com will be disabled (no generic tokens exported).");
             }
             else {
                 core.debug("GitHub.com routing: keeping tokens for CI.");
+                core.debug("Audit: Authorization to api.github.com may be sent by CI (tokens preserved).");
             }
             const masked = {
                 GITHUB_OAUTH_TOKEN: envUpdate.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
@@ -14031,7 +14035,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
                 PWD: process.cwd(),
                 CWD: workingDir,
             };
-            core.debug(`Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
+            core.debug(`Audit: Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
             core.debug(`Exec: patcher ${updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor).join(" ")}`);
             const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor), {
                 env: envUpdate,
@@ -14124,6 +14128,7 @@ async function run() {
         extraEnv.GH_HOST = host;
         extraEnv.GHE_HOST = host;
     }
+    core.debug(`Audit: Routing base host=${extraEnv.GH_HOST || ""} | DotCom=${(extraEnv.GH_HOST || "").includes("github.com")}`);
     core.debug(`Resolved GitHub endpoints:`);
     core.debug(`server=${resolvedServerUrl}, api=${resolvedApiUrl}, graphql=${resolvedGraphqlUrl}`);
     // Always mask the token strings in the logs.
