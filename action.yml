@@ -87,6 +87,7 @@ inputs:
     description: "Disable color output. Defaults to false."
     default: "false"
 
+
 outputs:
   dependencies:
     description: "Terraform and Terragrunt dependencies from the given directory. Only works for 'report'."

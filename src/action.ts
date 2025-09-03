@@ -580,12 +580,36 @@ async function runPatcher(
   switch (command) {
     case REPORT_COMMAND: {
       core.startGroup("Running 'patcher report'");
-      core.debug("Using read token for Patcher (GITHUB_OAUTH_TOKEN/GITHUB_TOKEN set)");
+      const envReport = getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv);
+      core.debug("Using read token for Patcher (GITHUB_OAUTH_TOKEN set; GITHUB_TOKEN/GH_TOKEN not exported)");
+      const masked = {
+        GITHUB_OAUTH_TOKEN: envReport.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
+        GITHUB_PUBLISH_TOKEN: envReport.GITHUB_PUBLISH_TOKEN ? "*** set" : "unset",
+        GITHUB_SERVER_URL: envReport.GITHUB_SERVER_URL || "",
+        GITHUB_API_URL: envReport.GITHUB_API_URL || "",
+        GITHUB_GRAPHQL_URL: envReport.GITHUB_GRAPHQL_URL || "",
+        GITHUB_ENDPOINT: envReport.GITHUB_ENDPOINT || "",
+        GITHUB_API_ENDPOINT: envReport.GITHUB_API_ENDPOINT || "",
+        GITHUB_GRAPHQL_ENDPOINT: envReport.GITHUB_GRAPHQL_ENDPOINT || "",
+        GH_HOST: envReport.GH_HOST || "",
+        GHE_HOST: envReport.GHE_HOST || "",
+        PATCHER_GITHUB_API_URL: envReport.PATCHER_GITHUB_API_URL || "",
+        PATCHER_GITHUB_GRAPHQL_URL: envReport.PATCHER_GITHUB_GRAPHQL_URL || "",
+        PATCHER_GITHUB_BASE_URL: envReport.PATCHER_GITHUB_BASE_URL || "",
+        GITHUB_ENTERPRISE_TOKEN: envReport.GITHUB_ENTERPRISE_TOKEN ? "*** set" : "unset",
+        PATH: envReport.PATH || "",
+        PWD: process.cwd(),
+        CWD: workingDir,
+      } as Record<string, string>;
+      core.debug(`Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
+      core.debug(
+        `Exec: patcher ${reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor).join(" ")}`
+      );
       const reportOutput = await exec.getExecOutput(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+          env: envReport,
         }
       );
       core.endGroup();
@@ -609,12 +633,36 @@ async function runPatcher(
         groupName += " (dry run)";
       }
       core.startGroup(groupName);
-      core.debug("Using update token for Patcher (GITHUB_OAUTH_TOKEN/GITHUB_TOKEN/GITHUB_PUBLISH_TOKEN set)");
+      const envUpdate = getPatcherEnvVars(gitCommiter, updateToken, updateToken, extraEnv);
+      core.debug("Using update token for Patcher (GITHUB_OAUTH_TOKEN/GITHUB_PUBLISH_TOKEN set; no generic tokens exported)");
+      const masked = {
+        GITHUB_OAUTH_TOKEN: envUpdate.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
+        GITHUB_PUBLISH_TOKEN: envUpdate.GITHUB_PUBLISH_TOKEN ? "*** set" : "unset",
+        GITHUB_SERVER_URL: envUpdate.GITHUB_SERVER_URL || "",
+        GITHUB_API_URL: envUpdate.GITHUB_API_URL || "",
+        GITHUB_GRAPHQL_URL: envUpdate.GITHUB_GRAPHQL_URL || "",
+        GITHUB_ENDPOINT: envUpdate.GITHUB_ENDPOINT || "",
+        GITHUB_API_ENDPOINT: envUpdate.GITHUB_API_ENDPOINT || "",
+        GITHUB_GRAPHQL_ENDPOINT: envUpdate.GITHUB_GRAPHQL_ENDPOINT || "",
+        GH_HOST: envUpdate.GH_HOST || "",
+        GHE_HOST: envUpdate.GHE_HOST || "",
+        PATCHER_GITHUB_API_URL: envUpdate.PATCHER_GITHUB_API_URL || "",
+        PATCHER_GITHUB_GRAPHQL_URL: envUpdate.PATCHER_GITHUB_GRAPHQL_URL || "",
+        PATCHER_GITHUB_BASE_URL: envUpdate.PATCHER_GITHUB_BASE_URL || "",
+        GITHUB_ENTERPRISE_TOKEN: envUpdate.GITHUB_ENTERPRISE_TOKEN ? "*** set" : "unset",
+        PATH: envUpdate.PATH || "",
+        PWD: process.cwd(),
+        CWD: workingDir,
+      } as Record<string, string>;
+      core.debug(`Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
+      core.debug(
+        `Exec: patcher ${updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor).join(" ")}`
+      );
       const updateOutput = await exec.getExecOutput(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, updateToken, updateToken, extraEnv),
+          env: envUpdate,
         }
       );
       core.endGroup();
@@ -675,9 +723,23 @@ export async function run() {
   const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
   const githubOrg = core.getInput("github_org") || "gruntwork-io";
+
   const extraEnv: { [key: string]: string } = {};
   if (githubBaseUrl) extraEnv.GITHUB_BASE_URL = githubBaseUrl;
   if (githubOrg) extraEnv.GITHUB_ORG = githubOrg;
+  if (process.env.PATCHER_GITHUB_API_URL) {
+    extraEnv.PATCHER_GITHUB_API_URL = process.env.PATCHER_GITHUB_API_URL as string;
+  }
+  if (process.env.PATCHER_GITHUB_GRAPHQL_URL) {
+    extraEnv.PATCHER_GITHUB_GRAPHQL_URL = process.env.PATCHER_GITHUB_GRAPHQL_URL as string;
+  }
+  if (process.env.PATCHER_GITHUB_BASE_URL) {
+    extraEnv.PATCHER_GITHUB_BASE_URL = process.env.PATCHER_GITHUB_BASE_URL as string;
+  }
+  if (process.env.GITHUB_ENTERPRISE_TOKEN) {
+    extraEnv.GITHUB_ENTERPRISE_TOKEN = process.env.GITHUB_ENTERPRISE_TOKEN as string;
+  }
+
 
   const resolvedServerUrl = process.env.GITHUB_SERVER_URL || githubBaseUrl;
   const base = resolvedServerUrl.replace(/\/$/, "");
@@ -691,6 +753,9 @@ export async function run() {
   extraEnv.GITHUB_ENDPOINT = resolvedApiUrl;
   extraEnv.GITHUB_API_ENDPOINT = resolvedApiUrl;
   extraEnv.GITHUB_GRAPHQL_ENDPOINT = resolvedGraphqlUrl;
+
+  core.debug(`Resolved GitHub endpoints:`);
+  core.debug(`server=${resolvedServerUrl}, api=${resolvedApiUrl}, graphql=${resolvedGraphqlUrl}`);
 
   try {
     const host = new URL(resolvedServerUrl).host || resolvedServerUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
