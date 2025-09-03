@@ -579,9 +579,50 @@ async function runPatcher(
 ): Promise<void> {
   switch (command) {
     case REPORT_COMMAND: {
+      core.startGroup("Preflight: Terragrunt access attempts (diagnostic)");
+      try {
+        const dotComUrl = "https://api.github.com/repos/gruntwork-io/terragrunt";
+        try {
+          const resA = await fetch(dotComUrl);
+          core.debug(`Preflight A GET ${dotComUrl} status=${resA.status}`);
+        } catch (e: any) {
+          core.debug(`Preflight A error=${e?.message || e}`);
+        }
+        try {
+          const resB = await fetch(dotComUrl, { method: "HEAD" as any });
+          core.debug(`Preflight B HEAD ${dotComUrl} status=${resB.status}`);
+        } catch (e: any) {
+          core.debug(`Preflight B error=${e?.message || e}`);
+        }
+        try {
+          const ls = await exec.getExecOutput("git", ["ls-remote", "https://github.com/gruntwork-io/terragrunt.git"]);
+          core.debug(`Preflight C git ls-remote exit=${ls.exitCode} out=${ls.stdout ? "yes" : "no"}`);
+        } catch (e: any) {
+          core.debug(`Preflight C error=${e?.message || e}`);
+        }
+      } finally {
+        core.endGroup();
+      }
+
       core.startGroup("Running 'patcher report'");
-      const envReport = getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv);
-      core.debug("Using read token for Patcher (GITHUB_OAUTH_TOKEN set; GITHUB_TOKEN/GH_TOKEN not exported)");
+      let envReport = getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv);
+      const hostReport = (envReport.GITHUB_SERVER_URL || "").toLowerCase();
+      const apiReport = (envReport.GITHUB_API_URL || "").toLowerCase();
+      const isDotComReport =
+        hostReport.includes("github.com") || apiReport.includes("api.github.com") || apiReport.includes("github.com");
+      if (isDotComReport) {
+        envReport = {
+          ...envReport,
+          GITHUB_OAUTH_TOKEN: "",
+          GITHUB_PUBLISH_TOKEN: "",
+          GITHUB_ENTERPRISE_TOKEN: "",
+          GITHUB_TOKEN: "",
+          GH_TOKEN: "",
+        } as Record<string, string>;
+        core.debug("DotCom routing: stripping tokens; api.github.com calls will be anonymous.");
+      } else {
+        core.debug("GHES routing: using GHES PAT and GHES endpoints.");
+      }
       const masked = {
         GITHUB_OAUTH_TOKEN: envReport.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
         GITHUB_PUBLISH_TOKEN: envReport.GITHUB_PUBLISH_TOKEN ? "*** set" : "unset",
@@ -633,10 +674,26 @@ async function runPatcher(
         groupName += " (dry run)";
       }
       core.startGroup(groupName);
-      const envUpdate = getPatcherEnvVars(gitCommiter, updateToken, updateToken, extraEnv);
-      core.debug(
-        "Using update token for Patcher (GITHUB_OAUTH_TOKEN/GITHUB_PUBLISH_TOKEN set; no generic tokens exported)"
-      );
+      let envUpdate = getPatcherEnvVars(gitCommiter, updateToken, updateToken, extraEnv);
+      const hostUpdate = (envUpdate.GITHUB_SERVER_URL || "").toLowerCase();
+      const apiUpdate = (envUpdate.GITHUB_API_URL || "").toLowerCase();
+      const isDotComUpdate =
+        hostUpdate.includes("github.com") || apiUpdate.includes("api.github.com") || apiUpdate.includes("github.com");
+      if (isDotComUpdate) {
+        envUpdate = {
+          ...envUpdate,
+          GITHUB_OAUTH_TOKEN: "",
+          GITHUB_PUBLISH_TOKEN: "",
+          GITHUB_ENTERPRISE_TOKEN: "",
+          GITHUB_TOKEN: "",
+          GH_TOKEN: "",
+        } as Record<string, string>;
+        core.debug("DotCom routing: stripping tokens; api.github.com calls will be anonymous.");
+      } else {
+        core.debug(
+          "Using update token for Patcher (GITHUB_OAUTH_TOKEN/GITHUB_PUBLISH_TOKEN set; no generic tokens exported)"
+        );
+      }
       const masked = {
         GITHUB_OAUTH_TOKEN: envUpdate.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
         GITHUB_PUBLISH_TOKEN: envUpdate.GITHUB_PUBLISH_TOKEN ? "*** set" : "unset",
@@ -649,7 +706,7 @@ async function runPatcher(
         GH_HOST: envUpdate.GH_HOST || "",
         GHE_HOST: envUpdate.GHE_HOST || "",
         PATCHER_GITHUB_API_URL: envUpdate.PATCHER_GITHUB_API_URL || "",
-        PATCHER_GITHUB_GRAPHQL_URL: envUpdate.PATCHER_GITHUB_GRAPHQL_URL || "",
+        PATCHER_GITHUB_GRAPHQL_URL: envUpdate.GITHUB_GRAPHQL_URL || "",
         PATCHER_GITHUB_BASE_URL: envUpdate.PATCHER_GITHUB_BASE_URL || "",
         GITHUB_ENTERPRISE_TOKEN: envUpdate.GITHUB_ENTERPRISE_TOKEN ? "*** set" : "unset",
         PATH: envUpdate.PATH || "",
