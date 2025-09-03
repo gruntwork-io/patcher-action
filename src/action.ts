@@ -591,6 +591,8 @@ async function runPatcher(
         GITHUB_ENDPOINT: envReport.GITHUB_ENDPOINT || "",
         GITHUB_API_ENDPOINT: envReport.GITHUB_API_ENDPOINT || "",
         GITHUB_GRAPHQL_ENDPOINT: envReport.GITHUB_GRAPHQL_ENDPOINT || "",
+        GITHUB_API: (envReport as any).GITHUB_API || "",
+        GITHUB_GRAPH: (envReport as any).GITHUB_GRAPH || "",
         GH_HOST: envReport.GH_HOST || "",
         GHE_HOST: envReport.GHE_HOST || "",
         PATCHER_GITHUB_API_URL: envReport.PATCHER_GITHUB_API_URL || "",
@@ -602,9 +604,7 @@ async function runPatcher(
         CWD: workingDir,
       } as Record<string, string>;
       core.debug(`Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
-      core.debug(
-        `Exec: patcher ${reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor).join(" ")}`
-      );
+      core.debug(`Exec: patcher ${reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor).join(" ")}`);
       const reportOutput = await exec.getExecOutput(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
@@ -634,7 +634,9 @@ async function runPatcher(
       }
       core.startGroup(groupName);
       const envUpdate = getPatcherEnvVars(gitCommiter, updateToken, updateToken, extraEnv);
-      core.debug("Using update token for Patcher (GITHUB_OAUTH_TOKEN/GITHUB_PUBLISH_TOKEN set; no generic tokens exported)");
+      core.debug(
+        "Using update token for Patcher (GITHUB_OAUTH_TOKEN/GITHUB_PUBLISH_TOKEN set; no generic tokens exported)"
+      );
       const masked = {
         GITHUB_OAUTH_TOKEN: envUpdate.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
         GITHUB_PUBLISH_TOKEN: envUpdate.GITHUB_PUBLISH_TOKEN ? "*** set" : "unset",
@@ -656,7 +658,16 @@ async function runPatcher(
       } as Record<string, string>;
       core.debug(`Patcher subprocess env (sanitized): ${JSON.stringify(masked)}`);
       core.debug(
-        `Exec: patcher ${updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor).join(" ")}`
+        `Exec: patcher ${updateArgs(
+          specFile,
+          updateStrategy,
+          prBranch,
+          prTitle,
+          dependency,
+          workingDir,
+          dryRun,
+          noColor
+        ).join(" ")}`
       );
       const updateOutput = await exec.getExecOutput(
         "patcher",
@@ -727,6 +738,11 @@ export async function run() {
   const extraEnv: { [key: string]: string } = {};
   if (githubBaseUrl) extraEnv.GITHUB_BASE_URL = githubBaseUrl;
   if (githubOrg) extraEnv.GITHUB_ORG = githubOrg;
+
+  // Ensure generic tokens do not leak into the Patcher subprocess
+  extraEnv.GITHUB_TOKEN = "";
+  extraEnv.GH_TOKEN = "";
+
   if (process.env.PATCHER_GITHUB_API_URL) {
     extraEnv.PATCHER_GITHUB_API_URL = process.env.PATCHER_GITHUB_API_URL as string;
   }
@@ -739,7 +755,6 @@ export async function run() {
   if (process.env.GITHUB_ENTERPRISE_TOKEN) {
     extraEnv.GITHUB_ENTERPRISE_TOKEN = process.env.GITHUB_ENTERPRISE_TOKEN as string;
   }
-
 
   const resolvedServerUrl = process.env.GITHUB_SERVER_URL || githubBaseUrl;
   const base = resolvedServerUrl.replace(/\/$/, "");
