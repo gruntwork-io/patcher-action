@@ -17,7 +17,7 @@ inputs:
     description: "Personal Access Token (PAT) used for 'update' to publish PRs against the relevant repo. If left unset, github_token will be used."
     required: false
   github_base_url:
-    description: "Base URL for GitHub (e.g., 'https://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
+    description: "Base URL for GitHub (e.g., 'https://github.company.com' or 'http://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
     required: false
     default: "https://github.com"
   github_org:

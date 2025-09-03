@@ -5,6 +5,7 @@ import * as github from "@actions/github";
 import * as toolCache from "@actions/tool-cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
+import { Octokit } from "@octokit/rest";
 import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/types";
 
 // Define constants
@@ -146,7 +147,11 @@ class GitHubProvider implements GitHubProviderInterface {
   private octokit: GitHub;
 
   constructor(config: GitHubConfig) {
-    this.octokit = github.getOctokit(config.token, {
+    // Use Octokit directly to bypass @actions/github HTTP protocol restrictions (HTTPS is otherwise required)
+    // Users shouldn't do this, but some will run their GitHub Enterprise instance over plain HTTP.
+    // If they specify an HTTP baseUrl, we'lll honor the HTTP protocol.
+    this.octokit = new Octokit({
+      auth: config.token,
       baseUrl:
         config.baseUrl === "https://github.com"
           ? "https://api.github.com"
