@@ -257,6 +257,12 @@ async function downloadAssetWithRetry(
 ): Promise<string> {
   const isPublicTool = PUBLIC_TOOLS.includes(repo as any);
 
+  // For public tools, temporarily unset GITHUB_BASE_URL to avoid protocol conflicts
+  const originalGithubBaseUrl = process.env.GITHUB_BASE_URL;
+  if (isPublicTool) {
+    delete process.env.GITHUB_BASE_URL;
+  }
+
   try {
     return await toolCache.downloadTool(assetUrl, undefined, authHeader, headers);
   } catch (err: any) {
@@ -264,7 +270,7 @@ async function downloadAssetWithRetry(
     const isAuthIssue = status === "404" || status === "403";
 
     if (isPublicTool && authHeader && isAuthIssue) {
-      // For public tools using browser_download_url, try without auth
+      // For public tools, try without auth
       core.warning(
         `Authenticated download of public asset ${owner}/${repo}@${tag} failed (${status}); retrying without a token.`
       );
@@ -290,6 +296,11 @@ async function downloadAssetWithRetry(
       );
     } else {
       throw err;
+    }
+  } finally {
+    // Restore the original GITHUB_BASE_URL for public tools
+    if (isPublicTool && originalGithubBaseUrl) {
+      process.env.GITHUB_BASE_URL = originalGithubBaseUrl;
     }
   }
 }
@@ -326,6 +337,7 @@ async function downloadGitHubBinary(
   token: string
 ): Promise<DownloadedBinary> {
   const binaryName = repoToBinaryMap(repo);
+  const isPublicTool = PUBLIC_TOOLS.includes(repo as any);
 
   // Check cache first
   const pathInCache = toolCache.find(repo, tag);
@@ -336,9 +348,35 @@ async function downloadGitHubBinary(
 
   core.info(`Downloading ${owner}/${repo} version ${tag}`);
 
-  // Get release and find compatible asset
-  const release = await githubProvider.getReleaseByTag(owner, repo, tag);
-  const asset = findCompatibleAsset(release, owner, repo, tag);
+  // For public tools, try with token first, then without if it fails
+  let release: Release;
+  let asset: ReleaseAsset;
+
+  try {
+    // First attempt: try to get release with token
+    release = await githubProvider.getReleaseByTag(owner, repo, tag);
+    asset = findCompatibleAsset(release, owner, repo, tag);
+  } catch (error: any) {
+    if (isPublicTool && (error.status === 401 || error.status === 403)) {
+      // For public tools, if authentication fails, try without token
+      core.warning(
+        `Authenticated access to public repository ${owner}/${repo} failed (${error.status}); retrying without token.`
+      );
+
+      // Create a tokenless provider for retry
+      const tokenlessConfig: GitHubConfig = {
+        baseUrl: "https://github.com",
+        apiVersion: "v3",
+        token: "",
+      };
+      const tokenlessProvider = createGitHubProvider(tokenlessConfig);
+
+      release = await tokenlessProvider.getReleaseByTag(owner, repo, tag);
+      asset = findCompatibleAsset(release, owner, repo, tag);
+    } else {
+      throw error;
+    }
+  }
 
   // Determine download configuration
   const { assetUrl, authHeader, headers } = determineDownloadConfig(asset, repo, token);
@@ -385,7 +423,32 @@ async function downloadAndSetupTooling(
       }
     }
 
-    const binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
+    // For public tools, try with the current provider first, then create a tokenless one if it fails
+    let binary: DownloadedBinary;
+    if (isPublicTool) {
+      try {
+        binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
+      } catch (error: any) {
+        if (error.message.includes("Authentication failed") || error.status === 401 || error.status === 403) {
+          core.warning(`Authenticated access to public repository ${org}/${repo} failed; retrying without token.`);
+
+          // Create a tokenless provider for retry
+          const tokenlessConfig: GitHubConfig = {
+            baseUrl: "https://github.com",
+            apiVersion: "v3",
+            token: "",
+          };
+          const tokenlessProvider = createGitHubProvider(tokenlessConfig);
+
+          binary = await downloadGitHubBinary(tokenlessProvider, org, repo, version, "");
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
+    }
+
     await setupBinaryInEnv(binary);
   }
 }
