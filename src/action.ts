@@ -550,6 +550,8 @@ function getPatcherEnvVars(
     ...process.env,
     ...(extra || {}),
     GITHUB_OAUTH_TOKEN: readToken,
+    GITHUB_TOKEN: readToken,
+    GH_TOKEN: readToken,
     GITHUB_PUBLISH_TOKEN: updateToken,
     PATCHER_TELEMETRY_ID: telemetryId,
     GIT_AUTHOR_NAME: gitCommiter.name,
@@ -580,6 +582,7 @@ async function runPatcher(
   switch (command) {
     case REPORT_COMMAND: {
       core.startGroup("Running 'patcher report'");
+      core.debug("Using read token for Patcher (GITHUB_OAUTH_TOKEN/GITHUB_TOKEN set)");
       const reportOutput = await exec.getExecOutput(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
@@ -608,6 +611,7 @@ async function runPatcher(
         groupName += " (dry run)";
       }
       core.startGroup(groupName);
+      core.debug("Using update token for Patcher (GITHUB_OAUTH_TOKEN/GITHUB_TOKEN/GITHUB_PUBLISH_TOKEN set)");
       const updateOutput = await exec.getExecOutput(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
