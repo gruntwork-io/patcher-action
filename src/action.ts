@@ -220,32 +220,25 @@ function determineDownloadConfig(
   asset: ReleaseAsset,
   repo: string,
   token: string
-): { assetUrl: string; useBrowserUrl: boolean; authHeader: string | undefined; headers: Record<string, string> } {
-  const useBrowserUrl = Boolean(asset.browser_download_url);
-  const assetUrl = useBrowserUrl ? (asset.browser_download_url as string) : asset.url;
+): { assetUrl: string; authHeader: string | undefined; headers: Record<string, string> } {
+  // Always use the API URL for consistent authentication behavior
+  const assetUrl = asset.url;
 
-  core.debug(`Selected asset URL for ${assetUrl} (using ${useBrowserUrl ? "browser" : "API"} URL)`);
+  core.debug(`Selected asset URL for ${assetUrl} (using API URL)`);
 
-  // Determine authentication and headers based on URL type and repo visibility
+  // Determine authentication and headers
   let authHeader: string | undefined;
   const headers: Record<string, string> = {};
 
-  if (useBrowserUrl) {
-    // browser_download_url: try with auth first, fallback to no auth for public tools
-    if (token) {
-      authHeader = token;
-    }
-    // No special Accept header needed for direct downloads
-  } else {
-    // Asset API URL: always needs auth, even for public repos
-    if (token) {
-      authHeader = `Bearer ${token}`;
-    }
-    // Asset API requires specific Accept header
-    headers.accept = "application/octet-stream";
+  // Asset API URL: always needs proper authentication
+  if (token) {
+    authHeader = `Bearer ${token}`;
   }
+  // Asset API requires specific headers
+  headers.accept = "application/octet-stream";
+  headers["X-GitHub-Api-Version"] = "2022-11-28";
 
-  return { assetUrl, useBrowserUrl, authHeader, headers };
+  return { assetUrl, authHeader, headers };
 }
 
 async function downloadAssetWithRetry(
@@ -255,7 +248,6 @@ async function downloadAssetWithRetry(
   owner: string,
   repo: string,
   tag: string,
-  useBrowserUrl: boolean,
   token: string
 ): Promise<string> {
   const isPublicTool = PUBLIC_TOOLS.includes(repo as any);
@@ -266,7 +258,7 @@ async function downloadAssetWithRetry(
     const status = (err?.status || err?.code || "").toString();
     const isAuthIssue = status === "404" || status === "403";
 
-    if (isPublicTool && authHeader && isAuthIssue && useBrowserUrl) {
+    if (isPublicTool && authHeader && isAuthIssue) {
       // For public tools using browser_download_url, try without auth
       core.warning(
         `Authenticated download of public asset ${owner}/${repo}@${tag} failed (${status}); retrying without a token.`
@@ -285,7 +277,7 @@ async function downloadAssetWithRetry(
         `Failed to download private asset ${owner}/${repo}@${tag}: ${err?.message || err}. ` +
           `Ensure the provided token has 'repo' scope and access to ${owner}/${repo}.`
       );
-    } else if (!useBrowserUrl && !token && isAuthIssue) {
+    } else if (!token && isAuthIssue) {
       throw new Error(
         `Asset API download requires authentication even for public repos. ` +
           `Failed to download ${owner}/${repo}@${tag}: ${err?.message || err}. ` +
@@ -344,19 +336,10 @@ async function downloadGitHubBinary(
   const asset = findCompatibleAsset(release, owner, repo, tag);
 
   // Determine download configuration
-  const { assetUrl, useBrowserUrl, authHeader, headers } = determineDownloadConfig(asset, repo, token);
+  const { assetUrl, authHeader, headers } = determineDownloadConfig(asset, repo, token);
 
   // Download the asset with retry logic
-  const downloadedPath = await downloadAssetWithRetry(
-    assetUrl,
-    authHeader,
-    headers,
-    owner,
-    repo,
-    tag,
-    useBrowserUrl,
-    token
-  );
+  const downloadedPath = await downloadAssetWithRetry(assetUrl, authHeader, headers, owner, repo, tag, token);
 
   core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
 
