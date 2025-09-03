@@ -85,7 +85,7 @@ jobs:
           patcher_version: v0.15.2
           working_dir: infrastructure-live
           spec_file: spec.json
-          pr_title: "[Patcher] [dev] Update ${{ matrix.ID }}"
-          pr_target_branch: "patcher-dev-updates-${{ matrix.ID }}"
+          pull_request_title: "[Patcher] [dev] Update ${{ matrix.ID }}"
+          pull_request_branch: "patcher-dev-updates-${{ matrix.ID }}"
           dependency: ${{ matrix.ID }}
           dry_run: true
