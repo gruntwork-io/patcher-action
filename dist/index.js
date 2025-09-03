@@ -13673,10 +13673,37 @@ async function downloadGitHubBinary(githubProvider, owner, repo, tag, token) {
     const useBrowserUrl = !!asset.browser_download_url;
     const assetUrl = useBrowserUrl ? asset.browser_download_url : asset.url;
     core.debug(`Selected asset URL for ${owner}/${repo}@${tag}: ${assetUrl}`);
-    const authHeader = token ? `Bearer ${token}` : undefined;
-    const downloadedPath = await toolCache.downloadTool(assetUrl, undefined, authHeader, {
-        accept: "application/octet-stream",
-    });
+    const publicRepos = [TFUPDATE_GITHUB_REPO, HCLEDIT_GITHUB_REPO];
+    const isPublicTool = publicRepos.includes(repo);
+    const authHeader = token ? `token ${token}` : undefined;
+    let downloadedPath;
+    try {
+        downloadedPath = await toolCache.downloadTool(assetUrl, undefined, authHeader, {
+            accept: "application/octet-stream",
+        });
+    }
+    catch (err) {
+        const status = ((err === null || err === void 0 ? void 0 : err.status) || (err === null || err === void 0 ? void 0 : err.code) || "").toString();
+        const isAuthIssue = status === "404" || status === "403";
+        if (isPublicTool && authHeader && isAuthIssue) {
+            core.warning(`Authenticated download of public asset ${owner}/${repo}@${tag} failed (${status}); retrying without a token.`);
+            try {
+                downloadedPath = await toolCache.downloadTool(assetUrl, undefined, undefined, {
+                    accept: "application/octet-stream",
+                });
+            }
+            catch (retryErr) {
+                throw new Error(`Public download failed for ${owner}/${repo}@${tag} after unauthenticated retry: ${(retryErr === null || retryErr === void 0 ? void 0 : retryErr.message) || retryErr}. The provided token may block public downloads. Remove the token for public tools or adjust its permissions.`);
+            }
+        }
+        else if (!isPublicTool && isAuthIssue) {
+            throw new Error(`Failed to download private asset ${owner}/${repo}@${tag}: ${(err === null || err === void 0 ? void 0 : err.message) || err}. ` +
+                `Ensure the provided token has 'repo' scope and access to ${owner}/${repo}.`);
+        }
+        else {
+            throw err;
+        }
+    }
     core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
     if (path.extname(asset.name) === ".gz") {
         await exec.exec(`mkdir /tmp/${binaryName}`);
@@ -13701,9 +13728,17 @@ async function downloadAndSetupTooling(userGitHubProvider, githubComProvider, us
         const isPublic = PUBLIC_TOOLS.includes(repo);
         const isGruntwork = GRUNTWORK_TOOLS.includes(repo);
         const githubProvider = isPublic ? githubComProvider : userGitHubProvider;
-        const token = isPublic ? "" : userToken;
+        const token = userToken || "";
         const toolType = isPublic ? "Public" : isGruntwork ? "Gruntwork" : "User";
-        core.debug(`Tool ${org}/${repo}@${version}: type=${toolType} provider=${isPublic ? "github.com" : "user"} token=${isPublic ? "none" : "readToken"}`);
+        core.debug(`Tool ${org}/${repo}@${version}: type=${toolType} provider=${isPublic ? "github.com" : "user"} token=${token ? "present" : "none"}`);
+        if (!isPublic) {
+            try {
+                await githubProvider.validateAccess(org, repo);
+            }
+            catch (e) {
+                core.warning(`Preflight access check failed for ${org}/${repo}: ${(e === null || e === void 0 ? void 0 : e.message) || e}`);
+            }
+        }
         const binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
         await setupBinaryInEnv(binary);
     }

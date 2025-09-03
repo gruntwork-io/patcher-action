@@ -232,10 +232,44 @@ async function downloadGitHubBinary(
   const assetUrl = useBrowserUrl ? (asset.browser_download_url as string) : asset.url;
   core.debug(`Selected asset URL for ${owner}/${repo}@${tag}: ${assetUrl}`);
 
-  const authHeader = token ? `Bearer ${token}` : undefined;
-  const downloadedPath = await toolCache.downloadTool(assetUrl, undefined, authHeader, {
-    accept: "application/octet-stream",
-  });
+  const publicRepos = [TFUPDATE_GITHUB_REPO, HCLEDIT_GITHUB_REPO] as const;
+  const isPublicTool = publicRepos.includes(repo as any);
+
+  const authHeader = token ? `token ${token}` : undefined;
+
+  let downloadedPath: string;
+  try {
+    downloadedPath = await toolCache.downloadTool(assetUrl, undefined, authHeader, {
+      accept: "application/octet-stream",
+    });
+  } catch (err: any) {
+    const status = (err?.status || err?.code || "").toString();
+    const isAuthIssue = status === "404" || status === "403";
+
+    if (isPublicTool && authHeader && isAuthIssue) {
+      core.warning(
+        `Authenticated download of public asset ${owner}/${repo}@${tag} failed (${status}); retrying without a token.`
+      );
+      try {
+        downloadedPath = await toolCache.downloadTool(assetUrl, undefined, undefined, {
+          accept: "application/octet-stream",
+        });
+      } catch (retryErr: any) {
+        throw new Error(
+          `Public download failed for ${owner}/${repo}@${tag} after unauthenticated retry: ${
+            retryErr?.message || retryErr
+          }. The provided token may block public downloads. Remove the token for public tools or adjust its permissions.`
+        );
+      }
+    } else if (!isPublicTool && isAuthIssue) {
+      throw new Error(
+        `Failed to download private asset ${owner}/${repo}@${tag}: ${err?.message || err}. ` +
+          `Ensure the provided token has 'repo' scope and access to ${owner}/${repo}.`
+      );
+    } else {
+      throw err;
+    }
+  }
 
   core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
 
@@ -274,13 +308,21 @@ async function downloadAndSetupTooling(
     const isGruntwork = GRUNTWORK_TOOLS.includes(repo as any);
 
     const githubProvider = isPublic ? githubComProvider : userGitHubProvider;
-    const token = isPublic ? "" : userToken;
+    const token = userToken || "";
     const toolType = isPublic ? "Public" : isGruntwork ? "Gruntwork" : "User";
     core.debug(
       `Tool ${org}/${repo}@${version}: type=${toolType} provider=${isPublic ? "github.com" : "user"} token=${
-        isPublic ? "none" : "readToken"
+        token ? "present" : "none"
       }`
     );
+
+    if (!isPublic) {
+      try {
+        await githubProvider.validateAccess(org, repo);
+      } catch (e: any) {
+        core.warning(`Preflight access check failed for ${org}/${repo}: ${e?.message || e}`);
+      }
+    }
 
     const binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
     await setupBinaryInEnv(binary);
