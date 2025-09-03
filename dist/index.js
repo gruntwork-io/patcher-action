@@ -13889,11 +13889,11 @@ async function validateAccessToPatcherCli(githubProvider) {
     await githubProvider.validateAccess(PATCHER_ORG, PATCHER_GIT_REPO);
 }
 async function run() {
-    const githubToken = core.getInput("github_token") || core.getInput("auth_token");
+    const githubToken = core.getInput("github_token");
     const patcherReadToken = core.getInput("read_token");
     const patcherUpdateToken = core.getInput("update_token");
     if (!githubToken) {
-        throw new Error("Either 'github_token' or 'auth_token' input is required");
+        throw new Error("A 'github_token' input is required");
     }
     const readToken = patcherReadToken || githubToken;
     const updateToken = patcherUpdateToken || githubToken;
