@@ -13665,17 +13665,16 @@ function findCompatibleAsset(release, owner, repo, tag) {
     return asset;
 }
 function determineDownloadConfig(asset, repo, token) {
-    const useBrowserUrl = !!asset.browser_download_url;
+    const useBrowserUrl = Boolean(asset.browser_download_url);
     const assetUrl = useBrowserUrl ? asset.browser_download_url : asset.url;
-    const isPublicTool = PUBLIC_TOOLS.includes(repo);
     core.debug(`Selected asset URL for ${assetUrl} (using ${useBrowserUrl ? "browser" : "API"} URL)`);
     // Determine authentication and headers based on URL type and repo visibility
     let authHeader;
     const headers = {};
     if (useBrowserUrl) {
-        // browser_download_url: only needs auth for private repos
-        if (!isPublicTool && token) {
-            authHeader = `Bearer ${token}`;
+        // browser_download_url: try with auth first, fallback to no auth for public tools
+        if (token) {
+            authHeader = token;
         }
         // No special Accept header needed for direct downloads
     }

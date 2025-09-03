@@ -223,7 +223,6 @@ function determineDownloadConfig(
 ): { assetUrl: string; useBrowserUrl: boolean; authHeader: string | undefined; headers: Record<string, string> } {
   const useBrowserUrl = Boolean(asset.browser_download_url);
   const assetUrl = useBrowserUrl ? (asset.browser_download_url as string) : asset.url;
-  const isPublicTool = PUBLIC_TOOLS.includes(repo as any);
 
   core.debug(`Selected asset URL for ${assetUrl} (using ${useBrowserUrl ? "browser" : "API"} URL)`);
 
@@ -232,9 +231,9 @@ function determineDownloadConfig(
   const headers: Record<string, string> = {};
 
   if (useBrowserUrl) {
-    // browser_download_url: only needs auth for private repos
-    if (!isPublicTool && token) {
-      authHeader = `Bearer ${token}`;
+    // browser_download_url: try with auth first, fallback to no auth for public tools
+    if (token) {
+      authHeader = token;
     }
     // No special Accept header needed for direct downloads
   } else {
