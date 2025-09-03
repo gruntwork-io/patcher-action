@@ -13928,7 +13928,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             }
             core.startGroup(groupName);
             const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor), {
-                env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+                env: getPatcherEnvVars(gitCommiter, updateToken, updateToken, extraEnv),
             });
             core.endGroup();
             core.startGroup("Setting 'updateResult' output");
@@ -13981,6 +13981,15 @@ async function run() {
         extraEnv.GITHUB_BASE_URL = githubBaseUrl;
     if (githubOrg)
         extraEnv.GITHUB_ORG = githubOrg;
+    const resolvedServerUrl = process.env.GITHUB_SERVER_URL || githubBaseUrl;
+    const base = resolvedServerUrl.replace(/\/$/, "");
+    const resolvedApiUrl = process.env.GITHUB_API_URL || `${base}/api/v3`;
+    const resolvedGraphqlUrl = process.env.GITHUB_GRAPHQL_URL || `${base}/api/graphql`;
+    extraEnv.GITHUB_SERVER_URL = resolvedServerUrl;
+    extraEnv.GITHUB_API_URL = resolvedApiUrl;
+    extraEnv.GITHUB_GRAPHQL_URL = resolvedGraphqlUrl;
+    core.debug(`Resolved GitHub endpoints:`);
+    core.debug(`server=${resolvedServerUrl}, api=${resolvedApiUrl}, graphql=${resolvedGraphqlUrl}`);
     // Always mask the token strings in the logs.
     core.setSecret(githubToken);
     core.setSecret(readToken);

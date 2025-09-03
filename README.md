@@ -38,6 +38,22 @@ steps:
 | `working_dir`            | Directory where Patcher should run. If empty, it will run in the whole repo.                                                                                                                             |                                                |
 | `update_strategy`        | Update strategy. Only used when running `update`. Valid options: `next-safe` or `next-breaking`. Refer to the ["Update Strategies" documentation](https://docs.gruntwork.io/patcher/update-strategies).  | `next-breaking`                                |
 | `include_dirs`           | List of directories to include using a double-star glob pattern. Only used when running `report`.                                                                                                        |                                                |
+### GitHub Enterprise (GHES) usage
+If you are running on GitHub Enterprise, set github_base_url to your GHES hostname. The action will derive the correct API and GraphQL endpoints for the Patcher CLI and use your provided tokens.
+
+Example:
+```yaml
+- uses: gruntwork-io/patcher-action@v2
+  with:
+    github_token: ${{ secrets.YOUR_GHES_TOKEN }}
+    github_base_url: "http://ghe.internal.example.com"
+    patcher_command: report
+```
+
+Token selection:
+- report uses read_token if provided, otherwise github_token
+- update uses update_token if provided, otherwise github_token
+
 | `exclude_dirs`           | List of directories to exclude using a double-star glob pattern. Only used when running `report`.                                                                                                        |                                                |
 | `spec_file`              | Default name of the upgrade specification file. This is used by Patcher to restrict an upgrade to certain dependencies.                                                                                  | `spec.json`                                    |
 | `dependency`             | Limit the update to a single dependency. Only used when running `update`. Format: `<org>/<repo>/<name>`. Example: `gruntwork-io/terraform-aws-service-catalog/services/ecs-module`.                      |                                                |
