@@ -13938,19 +13938,18 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             const hostReport = (envReport.GITHUB_SERVER_URL || "").toLowerCase();
             const apiReport = (envReport.GITHUB_API_URL || "").toLowerCase();
             const isDotComReport = hostReport.includes("github.com") || apiReport.includes("api.github.com") || apiReport.includes("github.com");
-            if (isDotComReport) {
+            if (!isDotComReport) {
                 envReport = {
                     ...envReport,
-                    GITHUB_OAUTH_TOKEN: "",
                     GITHUB_PUBLISH_TOKEN: "",
                     GITHUB_ENTERPRISE_TOKEN: "",
                     GITHUB_TOKEN: "",
                     GH_TOKEN: "",
                 };
-                core.debug("DotCom routing: stripping tokens; api.github.com calls will be anonymous.");
+                core.debug("GHES routing: preserving GHES PAT, stripping generic tokens.");
             }
             else {
-                core.debug("GHES routing: using GHES PAT and GHES endpoints.");
+                core.debug("GitHub.com routing: keeping tokens for CI; dotcom tokens are valid here.");
             }
             const masked = {
                 GITHUB_OAUTH_TOKEN: envReport.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
@@ -14000,19 +13999,18 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             const hostUpdate = (envUpdate.GITHUB_SERVER_URL || "").toLowerCase();
             const apiUpdate = (envUpdate.GITHUB_API_URL || "").toLowerCase();
             const isDotComUpdate = hostUpdate.includes("github.com") || apiUpdate.includes("api.github.com") || apiUpdate.includes("github.com");
-            if (isDotComUpdate) {
+            if (!isDotComUpdate) {
                 envUpdate = {
                     ...envUpdate,
-                    GITHUB_OAUTH_TOKEN: "",
                     GITHUB_PUBLISH_TOKEN: "",
                     GITHUB_ENTERPRISE_TOKEN: "",
                     GITHUB_TOKEN: "",
                     GH_TOKEN: "",
                 };
-                core.debug("DotCom routing: stripping tokens; api.github.com calls will be anonymous.");
+                core.debug("GHES routing: using update token; stripping generic tokens.");
             }
             else {
-                core.debug("Using update token for Patcher (GITHUB_OAUTH_TOKEN/GITHUB_PUBLISH_TOKEN set; no generic tokens exported)");
+                core.debug("GitHub.com routing: keeping tokens for CI.");
             }
             const masked = {
                 GITHUB_OAUTH_TOKEN: envUpdate.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
