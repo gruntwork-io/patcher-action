@@ -21,7 +21,8 @@ const TFUPDATE_VERSION = "v0.6.5";
 const HCLEDIT_ORG = "minamijoyo";
 const HCLEDIT_GITHUB_REPO = "hcledit";
 const HCLEDIT_VERSION = "v0.2.5";
-
+const GRUNTWORK_TOOLS = ["patcher-cli", "terrapatch-cli"] as const;
+const PUBLIC_TOOLS = ["tfupdate", "hcledit"] as const;
 const REPORT_COMMAND = "report";
 const UPDATE_COMMAND = "update";
 const VALID_COMMANDS = [REPORT_COMMAND, UPDATE_COMMAND];
@@ -201,11 +202,6 @@ class GitHubProvider implements GitHubProviderInterface {
 function createGitHubProvider(config: GitHubConfig): GitHubProviderInterface {
   return new GitHubProvider(config);
 }
-
-function isGruntworkTool(org: string): boolean {
-  return org === PATCHER_ORG || org === TERRAPATCH_ORG;
-}
-
 async function downloadGitHubBinary(
   githubProvider: GitHubProviderInterface,
   owner: string,
@@ -215,7 +211,6 @@ async function downloadGitHubBinary(
 ): Promise<DownloadedBinary> {
   const binaryName = repoToBinaryMap(repo);
 
-  // Before downloading, check the cache.
   const pathInCache = toolCache.find(repo, tag);
   if (pathInCache) {
     core.info(`Found ${owner}/${repo} version ${tag} in cache!`);
@@ -233,8 +228,12 @@ async function downloadGitHubBinary(
     throw new Error(`Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`);
   }
 
-  // Use @actions/tool-cache to download the binary
-  const downloadedPath = await toolCache.downloadTool(asset.url, undefined, `Bearer ${token}`, {
+  const useBrowserUrl = !!asset.browser_download_url;
+  const assetUrl = useBrowserUrl ? (asset.browser_download_url as string) : asset.url;
+  core.debug(`Selected asset URL for ${owner}/${repo}@${tag}: ${assetUrl}`);
+
+  const authHeader = token ? `Bearer ${token}` : undefined;
+  const downloadedPath = await toolCache.downloadTool(assetUrl, undefined, authHeader, {
     accept: "application/octet-stream",
   });
 
@@ -263,25 +262,26 @@ async function downloadAndSetupTooling(
   githubComProvider: GitHubProviderInterface,
   userToken: string
 ) {
-  // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
   const tools = [
-    {
-      org: PATCHER_ORG,
-      repo: PATCHER_GIT_REPO,
-      version: PATCHER_VERSION,
-    },
-    {
-      org: TERRAPATCH_ORG,
-      repo: TERRAPATCH_GIT_REPO,
-      version: TERRAPATCH_VERSION,
-    },
+    { org: PATCHER_ORG, repo: PATCHER_GIT_REPO, version: PATCHER_VERSION },
+    { org: TERRAPATCH_ORG, repo: TERRAPATCH_GIT_REPO, version: TERRAPATCH_VERSION },
     { org: TFUPDATE_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
     { org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION },
   ];
 
   for await (const { org, repo, version } of tools) {
-    const githubProvider = isGruntworkTool(org) ? userGitHubProvider : githubComProvider;
-    const token = isGruntworkTool(org) ? userToken : "";
+    const isPublic = PUBLIC_TOOLS.includes(repo as any);
+    const isGruntwork = GRUNTWORK_TOOLS.includes(repo as any);
+
+    const githubProvider = isPublic ? githubComProvider : userGitHubProvider;
+    const token = isPublic ? "" : userToken;
+    const toolType = isPublic ? "Public" : isGruntwork ? "Gruntwork" : "User";
+    core.debug(
+      `Tool ${org}/${repo}@${version}: type=${toolType} provider=${isPublic ? "github.com" : "user"} token=${
+        isPublic ? "none" : "readToken"
+      }`
+    );
+
     const binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
     await setupBinaryInEnv(binary);
   }
@@ -523,7 +523,9 @@ export async function run() {
   };
 
   const userGitHubProvider = createGitHubProvider(githubConfig);
-
+  core.debug(`Configured github_base_url: ${githubBaseUrl}`);
+  core.debug(`Configured github_org: ${githubOrg}`);
+  core.debug(`GitHub.com provider fixed baseUrl: https://github.com`);
   const githubComConfig: GitHubConfig = {
     baseUrl: "https://github.com",
     apiVersion: "v3",
