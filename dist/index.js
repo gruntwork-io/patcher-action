@@ -13988,6 +13988,19 @@ async function run() {
     extraEnv.GITHUB_SERVER_URL = resolvedServerUrl;
     extraEnv.GITHUB_API_URL = resolvedApiUrl;
     extraEnv.GITHUB_GRAPHQL_URL = resolvedGraphqlUrl;
+    extraEnv.GITHUB_ENDPOINT = resolvedApiUrl;
+    extraEnv.GITHUB_API_ENDPOINT = resolvedApiUrl;
+    extraEnv.GITHUB_GRAPHQL_ENDPOINT = resolvedGraphqlUrl;
+    try {
+        const host = new URL(resolvedServerUrl).host || resolvedServerUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
+        extraEnv.GH_HOST = host;
+        extraEnv.GHE_HOST = host;
+    }
+    catch {
+        const host = resolvedServerUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
+        extraEnv.GH_HOST = host;
+        extraEnv.GHE_HOST = host;
+    }
     core.debug(`Resolved GitHub endpoints:`);
     core.debug(`server=${resolvedServerUrl}, api=${resolvedApiUrl}, graphql=${resolvedGraphqlUrl}`);
     // Always mask the token strings in the logs.
