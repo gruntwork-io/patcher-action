@@ -13895,8 +13895,6 @@ function getPatcherEnvVars(gitCommiter, readToken, updateToken, extra) {
         ...process.env,
         ...(extra || {}),
         GITHUB_OAUTH_TOKEN: readToken,
-        GITHUB_TOKEN: readToken,
-        GH_TOKEN: readToken,
         GITHUB_PUBLISH_TOKEN: updateToken,
         PATCHER_TELEMETRY_ID: telemetryId,
         GIT_AUTHOR_NAME: gitCommiter.name,
