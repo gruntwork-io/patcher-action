@@ -24,6 +24,10 @@ inputs:
     description: "Organization name in GitHub. Defaults to 'gruntwork-io'."
     required: false
     default: "gruntwork-io"
+  dotcom_token:
+    description: "Optional GitHub.com token used for api.github.com calls when running in GHES. Pass via secrets.DOTCOM_TOKEN."
+    required: false
+
   patcher_command:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"

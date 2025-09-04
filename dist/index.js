@@ -13939,15 +13939,21 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             const apiReport = (envReport.GITHUB_API_URL || "").toLowerCase();
             const isDotComReport = hostReport.includes("github.com") || apiReport.includes("api.github.com") || apiReport.includes("github.com");
             if (!isDotComReport) {
+                const dotToken = envReport.DOTCOM_TOKEN || "";
                 envReport = {
                     ...envReport,
                     GITHUB_PUBLISH_TOKEN: "",
-                    GITHUB_ENTERPRISE_TOKEN: "",
-                    GITHUB_TOKEN: "",
-                    GH_TOKEN: "",
+                    GITHUB_ENTERPRISE_TOKEN: envReport.GITHUB_OAUTH_TOKEN || "",
+                    GITHUB_TOKEN: dotToken || "",
+                    GH_TOKEN: dotToken || "",
                 };
-                core.debug("GHES routing: preserving GHES PAT, stripping generic tokens.");
-                core.debug("Audit: Authorization to api.github.com will be disabled (no generic tokens exported).");
+                if (dotToken) {
+                    core.debug("GHES routing: preserving GHES PAT; setting DotCom token in GH_TOKEN/GITHUB_TOKEN for api.github.com.");
+                }
+                else {
+                    core.debug("GHES routing: preserving GHES PAT; no DotCom token provided, api.github.com calls will be anonymous.");
+                }
+                core.debug("Audit: Authorization to api.github.com will use dotcom token if provided; otherwise disabled.");
             }
             else {
                 core.debug("GitHub.com routing: keeping tokens for CI; dotcom tokens are valid here.");
@@ -13955,6 +13961,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             }
             const masked = {
                 GITHUB_OAUTH_TOKEN: envReport.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
+                DOTCOM_TOKEN: envReport.DOTCOM_TOKEN ? "*** set" : "unset",
                 GITHUB_PUBLISH_TOKEN: envReport.GITHUB_PUBLISH_TOKEN ? "*** set" : "unset",
                 GITHUB_SERVER_URL: envReport.GITHUB_SERVER_URL || "",
                 GITHUB_API_URL: envReport.GITHUB_API_URL || "",
@@ -13970,6 +13977,8 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
                 PATCHER_GITHUB_GRAPHQL_URL: envReport.PATCHER_GITHUB_GRAPHQL_URL || "",
                 PATCHER_GITHUB_BASE_URL: envReport.PATCHER_GITHUB_BASE_URL || "",
                 GITHUB_ENTERPRISE_TOKEN: envReport.GITHUB_ENTERPRISE_TOKEN ? "*** set" : "unset",
+                GITHUB_TOKEN: envReport.GITHUB_TOKEN ? "*** set" : "unset",
+                GH_TOKEN: envReport.GH_TOKEN ? "*** set" : "unset",
                 PATH: envReport.PATH || "",
                 PWD: process.cwd(),
                 CWD: workingDir,
@@ -14002,15 +14011,21 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             const apiUpdate = (envUpdate.GITHUB_API_URL || "").toLowerCase();
             const isDotComUpdate = hostUpdate.includes("github.com") || apiUpdate.includes("api.github.com") || apiUpdate.includes("github.com");
             if (!isDotComUpdate) {
+                const dotToken = envUpdate.DOTCOM_TOKEN || "";
                 envUpdate = {
                     ...envUpdate,
                     GITHUB_PUBLISH_TOKEN: "",
-                    GITHUB_ENTERPRISE_TOKEN: "",
-                    GITHUB_TOKEN: "",
-                    GH_TOKEN: "",
+                    GITHUB_ENTERPRISE_TOKEN: envUpdate.GITHUB_OAUTH_TOKEN || "",
+                    GITHUB_TOKEN: dotToken || "",
+                    GH_TOKEN: dotToken || "",
                 };
-                core.debug("GHES routing: using update token; stripping generic tokens.");
-                core.debug("Audit: Authorization to api.github.com will be disabled (no generic tokens exported).");
+                if (dotToken) {
+                    core.debug("GHES routing: using GHES update PAT; setting DotCom token in GH_TOKEN/GITHUB_TOKEN for api.github.com.");
+                }
+                else {
+                    core.debug("GHES routing: using GHES update PAT; no DotCom token provided, api.github.com calls will be anonymous.");
+                }
+                core.debug("Audit: Authorization to api.github.com will use dotcom token if provided; otherwise disabled.");
             }
             else {
                 core.debug("GitHub.com routing: keeping tokens for CI.");
@@ -14018,6 +14033,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             }
             const masked = {
                 GITHUB_OAUTH_TOKEN: envUpdate.GITHUB_OAUTH_TOKEN ? "*** set" : "unset",
+                DOTCOM_TOKEN: envUpdate.DOTCOM_TOKEN ? "*** set" : "unset",
                 GITHUB_PUBLISH_TOKEN: envUpdate.GITHUB_PUBLISH_TOKEN ? "*** set" : "unset",
                 GITHUB_SERVER_URL: envUpdate.GITHUB_SERVER_URL || "",
                 GITHUB_API_URL: envUpdate.GITHUB_API_URL || "",
@@ -14031,6 +14047,8 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
                 PATCHER_GITHUB_GRAPHQL_URL: envUpdate.GITHUB_GRAPHQL_URL || "",
                 PATCHER_GITHUB_BASE_URL: envUpdate.PATCHER_GITHUB_BASE_URL || "",
                 GITHUB_ENTERPRISE_TOKEN: envUpdate.GITHUB_ENTERPRISE_TOKEN ? "*** set" : "unset",
+                GITHUB_TOKEN: envUpdate.GITHUB_TOKEN ? "*** set" : "unset",
+                GH_TOKEN: envUpdate.GH_TOKEN ? "*** set" : "unset",
                 PATH: envUpdate.PATH || "",
                 PWD: process.cwd(),
                 CWD: workingDir,
@@ -14086,14 +14104,18 @@ async function run() {
     const dryRun = core.getBooleanInput("dry_run");
     const noColor = core.getBooleanInput("no_color");
     const githubOrg = core.getInput("github_org") || "gruntwork-io";
+    const dotcomToken = core.getInput("dotcom_token") || "";
     const extraEnv = {};
     if (githubBaseUrl)
         extraEnv.GITHUB_BASE_URL = githubBaseUrl;
     if (githubOrg)
         extraEnv.GITHUB_ORG = githubOrg;
-    // Ensure generic tokens do not leak into the Patcher subprocess
+    // Ensure generic tokens do not leak into the Patcher subprocess by default
     extraEnv.GITHUB_TOKEN = "";
     extraEnv.GH_TOKEN = "";
+    if (dotcomToken) {
+        extraEnv.DOTCOM_TOKEN = dotcomToken;
+    }
     if (process.env.PATCHER_GITHUB_API_URL) {
         extraEnv.PATCHER_GITHUB_API_URL = process.env.PATCHER_GITHUB_API_URL;
     }
