@@ -70,7 +70,7 @@ jobs:
           echo "============================"
           
           # Check if token is provided
-          if [ -z "$GH_TOKEN" ]; then
+          if [[ -z "$GH_TOKEN" ]]; then
             echo "❌ ERROR: GitHub token not found in secrets.${GITHUB_TOKEN_SECRET}"
             echo ""
             echo "💡 SOLUTION: Add your GitHub token to repository secrets with name '${GITHUB_TOKEN_SECRET}'"

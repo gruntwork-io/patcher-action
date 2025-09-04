@@ -87,11 +87,6 @@ steps:
       github_token: ${{ secrets.GITHUB_ENTERPRISE_TOKEN }}
 ```
 
-> [!NOTE]
-> - For GitHub Enterprise, use a Personal Access Token with appropriate repository permissions
-> - The `github_org` input represents the organization name in GitHub
-> - Repository names should match the naming conventions in your SCM provider
-
 ### Promotion Workflows
 
 Refer to the [Promotion Workflows with Terraform](https://blog.gruntwork.io/promotion-workflows-with-terraform-13c05bed953d).
