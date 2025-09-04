@@ -55,6 +55,6 @@ jobs:
           patcher_command: update
           working_dir: ./
           spec_file: spec.json
-          pr_title: "[Patcher] [prod] Update ${{ matrix.ID }}"
-          pr_target_branch: "patcher-prod-updates-${{ matrix.ID }}"
+          pull_request_title: "[Patcher] [prod] Update ${{ matrix.ID }}"
+          pull_request_branch: "patcher-prod-updates-${{ matrix.ID }}"
           dependency: ${{ matrix.ID }}
