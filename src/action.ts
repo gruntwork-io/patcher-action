@@ -611,24 +611,15 @@ async function runPatcher(
       const isDotComReport =
         hostReport.includes("github.com") || apiReport.includes("api.github.com") || apiReport.includes("github.com");
       if (!isDotComReport) {
-        const dotToken = (envReport as any).DOTCOM_TOKEN || "";
         envReport = {
           ...envReport,
           GITHUB_PUBLISH_TOKEN: "",
           GITHUB_ENTERPRISE_TOKEN: envReport.GITHUB_OAUTH_TOKEN || "",
-          GITHUB_TOKEN: dotToken || "",
-          GH_TOKEN: dotToken || "",
+          GITHUB_TOKEN: "",
+          GH_TOKEN: "",
         } as Record<string, string>;
-        if (dotToken) {
-          core.debug(
-            "GHES routing: preserving GHES PAT; setting DotCom token in GH_TOKEN/GITHUB_TOKEN for api.github.com."
-          );
-        } else {
-          core.debug(
-            "GHES routing: preserving GHES PAT; no DotCom token provided, api.github.com calls will be anonymous."
-          );
-        }
-        core.debug("Audit: Authorization to api.github.com will use dotcom token if provided; otherwise disabled.");
+        core.debug("GHES routing: preserving GHES PAT; api.github.com calls will be anonymous (no tokens exported).");
+        core.debug("Audit: Authorization to api.github.com is disabled (no tokens).");
       } else {
         core.debug("GitHub.com routing: keeping tokens for CI; dotcom tokens are valid here.");
         core.debug("Audit: Authorization to api.github.com may be sent by CI (tokens preserved).");
@@ -693,24 +684,15 @@ async function runPatcher(
       const isDotComUpdate =
         hostUpdate.includes("github.com") || apiUpdate.includes("api.github.com") || apiUpdate.includes("github.com");
       if (!isDotComUpdate) {
-        const dotToken = (envUpdate as any).DOTCOM_TOKEN || "";
         envUpdate = {
           ...envUpdate,
           GITHUB_PUBLISH_TOKEN: "",
           GITHUB_ENTERPRISE_TOKEN: envUpdate.GITHUB_OAUTH_TOKEN || "",
-          GITHUB_TOKEN: dotToken || "",
-          GH_TOKEN: dotToken || "",
+          GITHUB_TOKEN: "",
+          GH_TOKEN: "",
         } as Record<string, string>;
-        if (dotToken) {
-          core.debug(
-            "GHES routing: using GHES update PAT; setting DotCom token in GH_TOKEN/GITHUB_TOKEN for api.github.com."
-          );
-        } else {
-          core.debug(
-            "GHES routing: using GHES update PAT; no DotCom token provided, api.github.com calls will be anonymous."
-          );
-        }
-        core.debug("Audit: Authorization to api.github.com will use dotcom token if provided; otherwise disabled.");
+        core.debug("GHES routing: using GHES update PAT; api.github.com calls will be anonymous (no tokens exported).");
+        core.debug("Audit: Authorization to api.github.com is disabled (no tokens).");
       } else {
         core.debug("GitHub.com routing: keeping tokens for CI.");
         core.debug("Audit: Authorization to api.github.com may be sent by CI (tokens preserved).");
