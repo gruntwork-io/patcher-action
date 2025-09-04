@@ -13886,7 +13886,7 @@ function updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, wor
     }
     return args.concat([workingDir]);
 }
-function getPatcherEnvVars(gitCommiter, readToken, updateToken, extra) {
+function getPatcherEnvVars(gitCommiter, githubToken, extra) {
     const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
     // this is a workaround to get the version from the package.json file, since rootDir doesn't contain the package.json file
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -13894,18 +13894,20 @@ function getPatcherEnvVars(gitCommiter, readToken, updateToken, extra) {
     return {
         ...process.env,
         ...(extra || {}),
+        GITHUB_OAUTH_TOKEN: githubToken,
+        GITHUB_PUBLISH_TOKEN: githubToken,
         PATCHER_TELEMETRY_ID: telemetryId,
         GIT_AUTHOR_NAME: gitCommiter.name,
         GIT_AUTHOR_EMAIL: gitCommiter.email,
         PATCHER_ACTIONS_VERSION: `v${packageJson.version}`,
     };
 }
-async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, readToken, updateToken, dryRun, noColor, }, extraEnv) {
+async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, githubToken, dryRun, noColor, }, extraEnv) {
     switch (command) {
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
             const reportOutput = await exec.getExecOutput("patcher", reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor), {
-                env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+                env: getPatcherEnvVars(gitCommiter, githubToken, extraEnv),
             });
             core.endGroup();
             core.startGroup("Setting upgrade spec output");
@@ -13926,7 +13928,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             }
             core.startGroup(groupName);
             const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor), {
-                env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+                env: getPatcherEnvVars(gitCommiter, githubToken, extraEnv),
             });
             core.endGroup();
             core.startGroup("Setting 'updateResult' output");
@@ -14019,8 +14021,7 @@ async function run() {
         prTitle,
         dependency,
         workingDir,
-        readToken,
-        updateToken,
+        githubToken,
         dryRun,
         noColor,
     });
