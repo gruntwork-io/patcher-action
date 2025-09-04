@@ -79,8 +79,7 @@ type PatcherCliArgs = {
   prTitle: string;
   dependency: string;
   workingDir: string;
-  readToken: string;
-  updateToken: string;
+  githubToken: string;
   dryRun: boolean;
   noColor: boolean;
 };
@@ -537,8 +536,7 @@ function updateArgs(
 
 function getPatcherEnvVars(
   gitCommiter: GitCommitter,
-  readToken: string,
-  updateToken: string,
+  githubToken: string,
   extra?: { [key: string]: string }
 ): { [key: string]: string } {
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
@@ -549,6 +547,8 @@ function getPatcherEnvVars(
   return {
     ...process.env,
     ...(extra || {}),
+    GITHUB_OAUTH_TOKEN: githubToken,
+    GITHUB_PUBLISH_TOKEN: githubToken,
     PATCHER_TELEMETRY_ID: telemetryId,
     GIT_AUTHOR_NAME: gitCommiter.name,
     GIT_AUTHOR_EMAIL: gitCommiter.email,
@@ -568,8 +568,7 @@ async function runPatcher(
     prTitle,
     dependency,
     workingDir,
-    readToken,
-    updateToken,
+    githubToken,
     dryRun,
     noColor,
   }: PatcherCliArgs,
@@ -582,7 +581,7 @@ async function runPatcher(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+          env: getPatcherEnvVars(gitCommiter, githubToken, extraEnv),
         }
       );
       core.endGroup();
@@ -610,7 +609,7 @@ async function runPatcher(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+          env: getPatcherEnvVars(gitCommiter, githubToken, extraEnv),
         }
       );
       core.endGroup();
@@ -722,8 +721,7 @@ export async function run() {
     prTitle,
     dependency,
     workingDir,
-    readToken,
-    updateToken,
+    githubToken,
     dryRun,
     noColor,
   });
