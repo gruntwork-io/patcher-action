@@ -36,18 +36,24 @@ jobs:
     
     steps:
       - name: Validate Inputs
+        env:
+          GITHUB_BASE_URL: ${{ inputs.github_base_url }}
+          GITHUB_ORG: ${{ inputs.github_org }}
+          TEST_REPO: ${{ inputs.test_repo }}
+          TEST_VERSION: ${{ inputs.test_version }}
+          GITHUB_TOKEN_SECRET: ${{ inputs.github_token_secret }}
         run: |
           echo "🔍 Validating GitHub Access Token"
           echo "=================================="
-          echo "GitHub Base URL: ${{ inputs.github_base_url }}"
-          echo "Organization: ${{ inputs.github_org }}"
-          echo "Test Repository: ${{ inputs.test_repo }}"
-          echo "Test Version: ${{ inputs.test_version }}"
-          echo "Token Secret: ${{ inputs.github_token_secret }}"
+          echo "GitHub Base URL: ${GITHUB_BASE_URL}"
+          echo "Organization: ${GITHUB_ORG}"
+          echo "Test Repository: ${TEST_REPO}"
+          echo "Test Version: ${TEST_VERSION}"
+          echo "Token Secret: ${GITHUB_TOKEN_SECRET}"
           echo ""
           
           # Validate URL format
-          if [[ "${{ inputs.github_base_url }}" != http* ]]; then
+          if [[ "${GITHUB_BASE_URL}" != http* ]]; then
             echo "❌ ERROR: GitHub Base URL must start with http:// or https://"
             exit 1
           fi
@@ -65,9 +71,9 @@ jobs:
           
           # Check if token is provided
           if [ -z "$GH_TOKEN" ]; then
-            echo "❌ ERROR: GitHub token not found in secrets.${{ inputs.github_token_secret }}"
+            echo "❌ ERROR: GitHub token not found in secrets.${GITHUB_TOKEN_SECRET}"
             echo ""
-            echo "💡 SOLUTION: Add your GitHub token to repository secrets with name '${{ inputs.github_token_secret }}'"
+            echo "💡 SOLUTION: Add your GitHub token to repository secrets with name '${GITHUB_TOKEN_SECRET}'"
             echo "   For GitHub.com: Create a Personal Access Token with 'repo' scope"
             echo "   For GitHub Enterprise: Create a token with 'repo' scope on your enterprise instance"
             exit 1
@@ -295,6 +301,9 @@ jobs:
 
       - name: Validation Summary
         if: always()
+        env:
+          GITHUB_BASE_URL: ${{ inputs.github_base_url }}
+          GITHUB_ORG: ${{ inputs.github_org }}
         run: |
           echo ""
           echo "🎯 Validation Summary"
@@ -304,8 +313,8 @@ jobs:
           echo ""
           echo "📋 Next Steps:"
           echo "   1. Use the same token in your patcher-action workflow"
-          echo "   2. Use the same github_base_url: ${{ inputs.github_base_url }}"
-          echo "   3. Use the same github_org: ${{ inputs.github_org }}"
+          echo "   2. Use the same github_base_url: ${GITHUB_BASE_URL}"
+          echo "   3. Use the same github_org: ${GITHUB_ORG}"
           echo ""
           echo "❓ If you encountered issues:"
           echo "   1. Review the error messages above"
