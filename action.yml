@@ -21,7 +21,7 @@ inputs:
     required: false
     default: "https://github.com"
   github_org:
-    description: "Organization name in GitHub. Defaults to 'gruntwork-io'."
+    description: "Organization name in GitHub where resources like the Patcher CLI can be downloaded. Defaults to 'gruntwork-io'."
     required: false
     default: "gruntwork-io"
   patcher_command:
