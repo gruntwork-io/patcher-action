@@ -48,6 +48,6 @@ jobs:
           patcher_command: update
           working_dir: infrastructure-live
           spec_file: spec.json
-          pr_title: "[Patcher] Update ${{ matrix.ID }}"
-          pr_target_branch: "patcher-updates-${{ matrix.ID }}"
+          pull_request_title: "[Patcher] Update ${{ matrix.ID }}"
+          pull_request_branch: "patcher-updates-${{ matrix.ID }}"
           dependency: ${{ matrix.ID }}
