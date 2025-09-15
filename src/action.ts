@@ -12,7 +12,7 @@ import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/
 
 const PATCHER_ORG = core.getInput("github_org") || "gruntwork-io";
 const PATCHER_GIT_REPO = core.getInput("patcher_git_repo") || "patcher-cli";
-const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.2";
+const PATCHER_VERSION = core.getInput("patcher_version") || "v0.16.0";
 const TERRAPATCH_ORG = core.getInput("terrapatch_github_org") || core.getInput("github_org") || "gruntwork-io";
 const TERRAPATCH_GIT_REPO = core.getInput("terrapatch_git_repo") || "terrapatch-cli";
 const TERRAPATCH_VERSION = core.getInput("terrapatch_version") || "v0.1.6";

@@ -32,9 +32,9 @@ inputs:
     required: false
     default: "patcher-cli"
   patcher_version:
-    description: "Version of Patcher to use. Defaults to the v0.15.2 version."
+    description: "Version of Patcher to use. Defaults to the v0.16.0 version."
     required: false
-    default: "v0.15.2"
+    default: "v0.16.0"
   terrapatch_git_repo:
     description: "Repository name for downloading terrapatch cli. Defaults to 'terrapatch-cli'."
     required: false
