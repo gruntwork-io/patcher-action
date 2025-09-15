@@ -52,7 +52,7 @@ jobs:
         with:
           github_token: ${{ secrets.PATCHER_FULL_REPO }}
           patcher_command: report
-          patcher_version: v0.15.1
+          patcher_version: v0.15.2
           working_dir: infrastructure-live
           spec_file: spec.json
           include_dirs: "{*dev*}/**"
@@ -82,7 +82,7 @@ jobs:
         with:
           github_token: ${{ secrets.PATCHER_FULL_REPO }}
           patcher_command: update
-          patcher_version: v0.15.1
+          patcher_version: v0.15.2
           working_dir: infrastructure-live
           spec_file: spec.json
           pull_request_title: "[Patcher] [dev] Update ${{ matrix.ID }}"

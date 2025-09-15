@@ -8,19 +8,45 @@ branding:
 
 inputs:
   github_token:
-    description: "GitHub's Personal Access Token (PAT). Used to authenticate usage of Patcher as an action."
-    default: ${{ github.token }}
+    description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions."
+    required: false
   read_token:
     description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions. If left unset, github_token will be used."
+    required: false
   update_token:
     description: "Personal Access Token (PAT) used for 'update' to publish PRs against the relevant repo. If left unset, github_token will be used."
+    required: false
+  github_base_url:
+    description: "Base URL for GitHub (e.g., 'https://github.company.com' or 'http://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
+    required: false
+    default: "https://github.com"
+  github_org:
+    description: "Organization name in GitHub where resources like the Patcher CLI can be downloaded. Defaults to 'gruntwork-io'."
+    required: false
+    default: "gruntwork-io"
   patcher_command:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"
-  patcher_version:
-    description: "Version of Patcher to use. Defaults to the v0.15.1 version."
+  patcher_git_repo:
+    description: "Repository name for downloading patcher cli. Defaults to 'patcher-cli'."
     required: false
-    default: "v0.15.1"
+    default: "patcher-cli"
+  patcher_version:
+    description: "Version of Patcher to use. Defaults to the v0.16.0 version."
+    required: false
+    default: "v0.16.0"
+  terrapatch_git_repo:
+    description: "Repository name for downloading terrapatch cli. Defaults to 'terrapatch-cli'."
+    required: false
+    default: "terrapatch-cli"
+  terrapatch_version:
+    description: "Version of terrapatch to use. Defaults to the v0.1.6 version."
+    required: false
+    default: "v0.1.6"
+  terrapatch_github_org:
+    description: "Organization name for terrapatch repository in GitHub. Defaults to same as github_org."
+    required: false
+    default: ""
   include_dirs:
     description: >
       "Include only directories matching the given double-star glob pattern. Only works for `report`."

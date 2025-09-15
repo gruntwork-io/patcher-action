@@ -5,21 +5,26 @@ import * as github from "@actions/github";
 import * as toolCache from "@actions/tool-cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
+import { Octokit } from "@octokit/rest";
 import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/types";
 
 // Define constants
 
-const GRUNTWORK_GITHUB_ORG = "gruntwork-io";
-const PATCHER_GITHUB_REPO = "patcher-cli";
-const PATCHER_VERSION = core.getInput("patcher_version") || "v0.15.1";
-const TERRAPATCH_GITHUB_REPO = "terrapatch-cli";
-const TERRAPATCH_VERSION = "v0.1.6";
-
-const HCLEDIT_ORG = "minamijoyo";
+const PATCHER_ORG = core.getInput("github_org") || "gruntwork-io";
+const PATCHER_GIT_REPO = core.getInput("patcher_git_repo") || "patcher-cli";
+const PATCHER_VERSION = core.getInput("patcher_version") || "v0.16.0";
+const TERRAPATCH_ORG = core.getInput("terrapatch_github_org") || core.getInput("github_org") || "gruntwork-io";
+const TERRAPATCH_GIT_REPO = core.getInput("terrapatch_git_repo") || "terrapatch-cli";
+const TERRAPATCH_VERSION = core.getInput("terrapatch_version") || "v0.1.6";
+const TFUPDATE_ORG = "minamijoyo";
 const TFUPDATE_GITHUB_REPO = "tfupdate";
 const TFUPDATE_VERSION = "v0.6.5";
+const HCLEDIT_ORG = "minamijoyo";
 const HCLEDIT_GITHUB_REPO = "hcledit";
 const HCLEDIT_VERSION = "v0.2.5";
+
+const GRUNTWORK_TOOLS = [PATCHER_GIT_REPO, TERRAPATCH_GIT_REPO] as const;
+const PUBLIC_TOOLS = [TFUPDATE_GITHUB_REPO, HCLEDIT_GITHUB_REPO] as const;
 
 const REPORT_COMMAND = "report";
 const UPDATE_COMMAND = "update";
@@ -42,6 +47,28 @@ const PR_TITLE_FLAG = "--pr-title";
 const PR_BRANCH_FLAG = "--pr-branch";
 
 // Define types
+
+interface GitHubConfig {
+  baseUrl: string;
+  apiVersion: string;
+  token: string;
+}
+
+interface ReleaseAsset {
+  name: string;
+  url: string;
+  browser_download_url?: string;
+}
+
+interface Release {
+  assets: ReleaseAsset[];
+  tag_name: string;
+}
+
+interface GitHubProviderInterface {
+  getReleaseByTag(owner: string, repo: string, tag: string): Promise<Release>;
+  validateAccess(owner: string, repo: string): Promise<void>;
+}
 
 type PatcherCliArgs = {
   specFile: string;
@@ -116,57 +143,180 @@ async function setupBinaryInEnv(binary: DownloadedBinary) {
   await exec.exec("chmod", ["+x", binaryPath]);
 }
 
-async function downloadGitHubBinary(
-  octokit: GitHub,
-  owner: string,
-  repo: string,
-  tag: string,
-  token: string
-): Promise<DownloadedBinary> {
-  const binaryName = repoToBinaryMap(repo);
+class GitHubProvider implements GitHubProviderInterface {
+  private octokit: GitHub;
 
-  // Before downloading, check the cache.
-  const pathInCache = toolCache.find(repo, tag);
-  if (pathInCache) {
-    core.info(`Found ${owner}/${repo} version ${tag} in cache!`);
-
-    return { folder: pathInCache, name: binaryName };
+  constructor(config: GitHubConfig) {
+    // Use Octokit directly to bypass @actions/github HTTP protocol restrictions (HTTPS is otherwise required)
+    // Users shouldn't do this, but some will run their GitHub Enterprise instance over plain HTTP.
+    // If they specify an HTTP baseUrl, we'lll honor the HTTP protocol.
+    this.octokit = new Octokit({
+      auth: config.token,
+      baseUrl:
+        config.baseUrl === "https://github.com"
+          ? "https://api.github.com"
+          : `${config.baseUrl}/api/${config.apiVersion}`,
+    });
   }
 
-  core.info(`Downloading ${owner}/${repo} version ${tag}`);
+  async getReleaseByTag(owner: string, repo: string, tag: string): Promise<Release> {
+    try {
+      const response = await this.octokit.rest.repos.getReleaseByTag({
+        owner,
+        repo,
+        tag,
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.status === 404) {
+        throw new Error(
+          `Release '${tag}' not found in repository '${owner}/${repo}'. Please check the repository exists and the tag is correct.`
+        );
+      } else if (error.status === 401 || error.status === 403) {
+        throw new Error(
+          `Authentication failed when accessing '${owner}/${repo}'. Please check your token permissions.`
+        );
+      } else {
+        throw error;
+      }
+    }
+  }
 
-  const getReleaseResponse = await octokit.rest.repos.getReleaseByTag({
-    owner,
-    repo,
-    tag,
-  });
+  async validateAccess(owner: string, repo: string): Promise<void> {
+    try {
+      await this.octokit.rest.repos.get({
+        owner,
+        repo,
+      });
+    } catch (error: any) {
+      if (error.status === 404 || error.message.includes("Not Found")) {
+        if (owner !== "gruntwork-io") {
+          core.warning(
+            `Cannot validate access to '${owner}/${repo}' repository. This may be due to token permissions or repository visibility. Proceeding with download attempt.`
+          );
+          return;
+        }
+        throw Error(
+          `Cannot access the '${repo}' repository. This could indicate: 1) The repository doesn't exist, 2) Your token doesn't have access to this repository, or 3) Your token lacks the 'repo' scope for private repositories. Please check your token permissions and repository access. If you continue to have issues and are a Gruntwork customer, contact support@gruntwork.io.`
+        );
+      } else {
+        throw error;
+      }
+    }
+  }
+}
 
+function createGitHubProvider(config: GitHubConfig): GitHubProviderInterface {
+  return new GitHubProvider(config);
+}
+
+function findCompatibleAsset(release: Release, owner: string, repo: string, tag: string): ReleaseAsset {
   const re = new RegExp(`${osPlatform()}.*${arch()}`);
-  const asset = getReleaseResponse.data.assets.find((obj: any) => re.test(obj.name));
+  const asset = release.assets.find((obj: ReleaseAsset) => re.test(obj.name));
 
   if (!asset) {
     throw new Error(`Can not find ${owner}/${repo} release for ${tag} in platform ${re}.`);
   }
 
-  // Use @actions/tool-cache to download the binary from GitHub
-  const downloadedPath = await toolCache.downloadTool(
-    asset.url,
-    // Don't set a destination path. It will default to a temporary one.
-    undefined,
-    `token ${token}`,
-    {
-      accept: "application/octet-stream",
+  return asset;
+}
+
+function determineDownloadConfig(
+  asset: ReleaseAsset,
+  repo: string,
+  token: string
+): { assetUrl: string; authHeader: string | undefined; headers: Record<string, string> } {
+  // Always use the API URL for consistent authentication behavior
+  const assetUrl = asset.url;
+
+  core.debug(`Selected asset URL for ${assetUrl} (using API URL)`);
+
+  // Determine authentication and headers
+  let authHeader: string | undefined;
+  const headers: Record<string, string> = {};
+
+  // Asset API URL: always needs proper authentication
+  if (token) {
+    authHeader = `Bearer ${token}`;
+  }
+  // Asset API requires specific headers
+  headers.accept = "application/octet-stream";
+  headers["X-GitHub-Api-Version"] = "2022-11-28";
+
+  return { assetUrl, authHeader, headers };
+}
+
+async function downloadAssetWithRetry(
+  assetUrl: string,
+  authHeader: string | undefined,
+  headers: Record<string, string>,
+  owner: string,
+  repo: string,
+  tag: string,
+  token: string
+): Promise<string> {
+  const isPublicTool = PUBLIC_TOOLS.includes(repo as any);
+
+  // For public tools, temporarily unset GITHUB_BASE_URL to avoid protocol conflicts
+  const originalGithubBaseUrl = process.env.GITHUB_BASE_URL;
+  if (isPublicTool) {
+    delete process.env.GITHUB_BASE_URL;
+  }
+
+  try {
+    return await toolCache.downloadTool(assetUrl, undefined, authHeader, headers);
+  } catch (err: any) {
+    const status = (err?.status || err?.code || "").toString();
+    const isAuthIssue = status === "404" || status === "403";
+
+    if (isPublicTool && authHeader && isAuthIssue) {
+      // For public tools, try without auth
+      core.warning(
+        `Authenticated download of public asset ${owner}/${repo}@${tag} failed (${status}); retrying without a token.`
+      );
+      try {
+        return await toolCache.downloadTool(assetUrl, undefined, undefined, {});
+      } catch (retryErr: any) {
+        throw new Error(
+          `Public download failed for ${owner}/${repo}@${tag} after unauthenticated retry: ${
+            retryErr?.message || retryErr
+          }. The provided token may block public downloads. Remove the token for public tools or adjust its permissions.`
+        );
+      }
+    } else if (!isPublicTool && isAuthIssue) {
+      throw new Error(
+        `Failed to download private asset ${owner}/${repo}@${tag}: ${err?.message || err}. ` +
+          `Ensure the provided token has 'repo' scope and access to ${owner}/${repo}.`
+      );
+    } else if (!token && isAuthIssue) {
+      throw new Error(
+        `Asset API download requires authentication even for public repos. ` +
+          `Failed to download ${owner}/${repo}@${tag}: ${err?.message || err}. ` +
+          `Provide a token with appropriate permissions.`
+      );
+    } else {
+      throw err;
     }
-  );
+  } finally {
+    // Restore the original GITHUB_BASE_URL for public tools
+    if (isPublicTool && originalGithubBaseUrl) {
+      process.env.GITHUB_BASE_URL = originalGithubBaseUrl;
+    }
+  }
+}
 
-  core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
-
+async function extractAndCacheBinary(
+  downloadedPath: string,
+  asset: ReleaseAsset,
+  binaryName: string,
+  repo: string,
+  tag: string
+): Promise<DownloadedBinary> {
   if (path.extname(asset.name) === ".gz") {
     await exec.exec(`mkdir /tmp/${binaryName}`);
     await exec.exec(`tar -C /tmp/${binaryName} -xzvf ${downloadedPath}`);
 
     const extractedPath = path.join("/tmp", binaryName, binaryName);
-
     const cachedPath = await toolCache.cacheFile(extractedPath, binaryName, repo, tag);
     core.debug(`Cached in ${cachedPath}`);
 
@@ -179,25 +329,126 @@ async function downloadGitHubBinary(
   return { folder: cachedPath, name: binaryName };
 }
 
-async function downloadAndSetupTooling(octokit: GitHub, token: string) {
-  // Setup the tools also installed in https://hub.docker.com/r/gruntwork/patcher_bash_env
+async function downloadGitHubBinary(
+  githubProvider: GitHubProviderInterface,
+  owner: string,
+  repo: string,
+  tag: string,
+  token: string
+): Promise<DownloadedBinary> {
+  const binaryName = repoToBinaryMap(repo);
+  const isPublicTool = PUBLIC_TOOLS.includes(repo as any);
+
+  // Check cache first
+  const pathInCache = toolCache.find(repo, tag);
+  if (pathInCache) {
+    core.info(`Found ${owner}/${repo} version ${tag} in cache!`);
+    return { folder: pathInCache, name: binaryName };
+  }
+
+  core.info(`Downloading ${owner}/${repo} version ${tag}`);
+
+  // For public tools, try with token first, then without if it fails
+  let release: Release;
+  let asset: ReleaseAsset;
+
+  try {
+    // First attempt: try to get release with token
+    release = await githubProvider.getReleaseByTag(owner, repo, tag);
+    asset = findCompatibleAsset(release, owner, repo, tag);
+  } catch (error: any) {
+    if (isPublicTool && (error.status === 401 || error.status === 403)) {
+      // For public tools, if authentication fails, try without token
+      core.warning(
+        `Authenticated access to public repository ${owner}/${repo} failed (${error.status}); retrying without token.`
+      );
+
+      // Create a tokenless provider for retry
+      const tokenlessConfig: GitHubConfig = {
+        baseUrl: "https://github.com",
+        apiVersion: "v3",
+        token: "",
+      };
+      const tokenlessProvider = createGitHubProvider(tokenlessConfig);
+
+      release = await tokenlessProvider.getReleaseByTag(owner, repo, tag);
+      asset = findCompatibleAsset(release, owner, repo, tag);
+    } else {
+      throw error;
+    }
+  }
+
+  // Determine download configuration
+  const { assetUrl, authHeader, headers } = determineDownloadConfig(asset, repo, token);
+
+  // Download the asset with retry logic
+  const downloadedPath = await downloadAssetWithRetry(assetUrl, authHeader, headers, owner, repo, tag, token);
+
+  core.debug(`${owner}/${repo}@'${tag}' has been downloaded at ${downloadedPath}`);
+
+  // Extract and cache the binary
+  return await extractAndCacheBinary(downloadedPath, asset, binaryName, repo, tag);
+}
+
+async function downloadAndSetupTooling(
+  userGitHubProvider: GitHubProviderInterface,
+  githubComProvider: GitHubProviderInterface,
+  userToken: string
+) {
   const tools = [
-    {
-      org: GRUNTWORK_GITHUB_ORG,
-      repo: PATCHER_GITHUB_REPO,
-      version: PATCHER_VERSION,
-    },
-    {
-      org: GRUNTWORK_GITHUB_ORG,
-      repo: TERRAPATCH_GITHUB_REPO,
-      version: TERRAPATCH_VERSION,
-    },
-    { org: HCLEDIT_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
+    { org: PATCHER_ORG, repo: PATCHER_GIT_REPO, version: PATCHER_VERSION },
+    { org: TERRAPATCH_ORG, repo: TERRAPATCH_GIT_REPO, version: TERRAPATCH_VERSION },
+    { org: TFUPDATE_ORG, repo: TFUPDATE_GITHUB_REPO, version: TFUPDATE_VERSION },
     { org: HCLEDIT_ORG, repo: HCLEDIT_GITHUB_REPO, version: HCLEDIT_VERSION },
   ];
 
   for await (const { org, repo, version } of tools) {
-    const binary = await downloadGitHubBinary(octokit, org, repo, version, token);
+    const isPublicTool = PUBLIC_TOOLS.includes(repo as any);
+    const isGruntworkTool = GRUNTWORK_TOOLS.includes(repo as any);
+
+    const githubProvider = isPublicTool ? githubComProvider : userGitHubProvider;
+    const token = userToken || "";
+    const toolType = isPublicTool ? "Public" : isGruntworkTool ? "Gruntwork" : "User";
+    core.debug(
+      `Tool ${org}/${repo}@${version}: type=${toolType} provider=${isPublicTool ? "github.com" : "user"} token=${
+        token ? "present" : "none"
+      }`
+    );
+
+    if (!isPublicTool) {
+      try {
+        await githubProvider.validateAccess(org, repo);
+      } catch (e: any) {
+        core.warning(`Preflight access check failed for ${org}/${repo}: ${e?.message || e}`);
+      }
+    }
+
+    // For public tools, try with the current provider first, then create a tokenless one if it fails
+    let binary: DownloadedBinary;
+    if (isPublicTool) {
+      try {
+        binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
+      } catch (error: any) {
+        if (error.message.includes("Authentication failed") || error.status === 401 || error.status === 403) {
+          core.warning(`Authenticated access to public repository ${org}/${repo} failed; retrying without token.`);
+
+          // Create a tokenless provider for retry
+          const tokenlessConfig: GitHubConfig = {
+            baseUrl: "https://github.com",
+            apiVersion: "v3",
+            token: "",
+          };
+          const tokenlessProvider = createGitHubProvider(tokenlessConfig);
+
+          binary = await downloadGitHubBinary(tokenlessProvider, org, repo, version, "");
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      binary = await downloadGitHubBinary(githubProvider, org, repo, version, token);
+    }
+
     await setupBinaryInEnv(binary);
   }
 }
@@ -287,7 +538,8 @@ function updateArgs(
 function getPatcherEnvVars(
   gitCommiter: GitCommitter,
   readToken: string,
-  updateToken: string
+  updateToken: string,
+  extra?: { [key: string]: string }
 ): { [key: string]: string } {
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
   // this is a workaround to get the version from the package.json file, since rootDir doesn't contain the package.json file
@@ -296,6 +548,7 @@ function getPatcherEnvVars(
 
   return {
     ...process.env,
+    ...(extra || {}),
     GITHUB_OAUTH_TOKEN: readToken,
     GITHUB_PUBLISH_TOKEN: updateToken,
     PATCHER_TELEMETRY_ID: telemetryId,
@@ -321,7 +574,8 @@ async function runPatcher(
     updateToken,
     dryRun,
     noColor,
-  }: PatcherCliArgs
+  }: PatcherCliArgs,
+  extraEnv?: { [key: string]: string }
 ): Promise<void> {
   switch (command) {
     case REPORT_COMMAND: {
@@ -330,7 +584,7 @@ async function runPatcher(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken),
+          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
         }
       );
       core.endGroup();
@@ -358,7 +612,7 @@ async function runPatcher(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken),
+          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
         }
       );
       core.endGroup();
@@ -390,27 +644,22 @@ function parseCommitAuthor(commitAuthor: string): GitCommitter {
   throw Error(`Invalid commit_author input: "${commitAuthor}". Should be in the format "Name <name@email.com>"`);
 }
 
-async function validateAccessToPatcherCli(octokit: GitHub) {
-  try {
-    await octokit.rest.repos.get({
-      owner: GRUNTWORK_GITHUB_ORG,
-      repo: PATCHER_GITHUB_REPO,
-    });
-  } catch (error: any) {
-    if (error.message.includes("Not Found")) {
-      throw Error(
-        `Can not find the '${PATCHER_GITHUB_REPO}' repo. If you are a Gruntwork customer, contact support@gruntwork.io.`
-      );
-    } else {
-      throw error;
-    }
-  }
+async function validateAccessToPatcherCli(githubProvider: GitHubProviderInterface) {
+  await githubProvider.validateAccess(PATCHER_ORG, PATCHER_GIT_REPO);
 }
 
 export async function run() {
-  const gruntworkToken = core.getInput("github_token");
+  const githubToken = core.getInput("github_token");
   const patcherReadToken = core.getInput("read_token");
   const patcherUpdateToken = core.getInput("update_token");
+
+  if (!githubToken) {
+    throw new Error("A 'github_token' input is required");
+  }
+
+  const readToken = patcherReadToken || githubToken;
+  const updateToken = patcherUpdateToken || githubToken;
+  const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
   const command = core.getInput("patcher_command");
   const updateStrategy = core.getInput("update_strategy");
   const dependency = core.getInput("dependency");
@@ -423,21 +672,35 @@ export async function run() {
   const prTitle = core.getInput("pull_request_title");
   const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
-
-  // if the user didn't specify a token specifically for `patcher update`,
-  // that's ok, we can try to use the github token instead. doing this adoption
-  // is for back compatibility reasons
-  const readToken = patcherReadToken ? patcherReadToken : gruntworkToken;
-  const updateToken = patcherUpdateToken ? patcherUpdateToken : gruntworkToken;
+  const githubOrg = core.getInput("github_org") || "gruntwork-io";
+  const extraEnv: { [key: string]: string } = {};
+  if (githubBaseUrl) extraEnv.GITHUB_BASE_URL = githubBaseUrl;
+  if (githubOrg) extraEnv.GITHUB_ORG = githubOrg;
 
   // Always mask the token strings in the logs.
-  core.setSecret(gruntworkToken);
+  core.setSecret(githubToken);
   core.setSecret(readToken);
   core.setSecret(updateToken);
 
+  const githubConfig: GitHubConfig = {
+    baseUrl: githubBaseUrl,
+    apiVersion: "v3",
+    token: githubToken,
+  };
+
+  const userGitHubProvider = createGitHubProvider(githubConfig);
+  core.debug(`Configured github_base_url: ${githubBaseUrl}`);
+  core.debug(`Configured github_org: ${githubOrg}`);
+  core.debug(`GitHub.com provider fixed baseUrl: https://github.com`);
+  const githubComConfig: GitHubConfig = {
+    baseUrl: "https://github.com",
+    apiVersion: "v3",
+    token: githubToken,
+  };
+  const githubComProvider = createGitHubProvider(githubComConfig);
+
   // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
-  const octokit = github.getOctokit(gruntworkToken);
-  await validateAccessToPatcherCli(octokit);
+  await validateAccessToPatcherCli(userGitHubProvider);
 
   // Validate if the 'patcher_command' provided is valid.
   if (!isPatcherCommandValid(command)) {
@@ -449,7 +712,7 @@ export async function run() {
   const gitCommiter = parseCommitAuthor(commitAuthor);
 
   core.startGroup("Downloading Patcher and patch tools");
-  await downloadAndSetupTooling(octokit, gruntworkToken);
+  await downloadAndSetupTooling(userGitHubProvider, githubComProvider, readToken);
   core.endGroup();
 
   await runPatcher(gitCommiter, command, {
