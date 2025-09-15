@@ -54,7 +54,7 @@ steps:
 - `spec`: All discovered dependencies from the given directory using any filters. Only works for `report`.
 - `updateResult`: The result of the upgrade. Only works for `update`.
 
-### Using alternative GitHub repositories.
+### Using alternative GitHub repositories
 
 By default, the action retrieves Patcher and Terrapatch from the official Gruntwork repositories. You can also point it
 to other repositories, like your own forks, by using these inputs:
@@ -91,7 +91,52 @@ steps:
       github_token: ${{ secrets.GITHUB_ENTERPRISE_TOKEN }}
 ```
 
-### Promotion Workflows
+Carefully review the action inputs above to understand the full set of configuration options.
+
+## Common customizations
+
+Here are some common customization options that customers use.
+
+### Filtering Dependencies
+
+If you want to exclude certain directories or files, you can add filtering:
+
+```yml
+- uses: gruntwork-io/patcher-action@v2
+  with:
+    patcher_command: report
+    read_token: ${{ secrets.PATCHER_CI_TOKEN }}
+    exclude_dirs: "examples/**,tests/**"
+    working_dir: ./
+```
+
+### Update Strategies
+
+Control how aggressively Patcher updates dependencies:
+
+```yml
+- uses: gruntwork-io/patcher-action@v2
+  with:
+    patcher_command: update
+    update_token: ${{ secrets.PATCHER_CI_TOKEN }}
+    update_strategy: next-safe  # or "next-breaking"
+    # ... other parameters
+```
+
+### Dry Run Mode
+
+Test your workflow without creating actual pull requests:
+
+```yml
+- uses: gruntwork-io/patcher-action@v2
+  with:
+    patcher_command: update
+    update_token: ${{ secrets.PATCHER_CI_TOKEN }}
+    dry_run: true
+    # ... other parameters
+```
+
+## Promotion Workflows
 
 Refer to the [Promotion Workflows with Terraform](https://blog.gruntwork.io/promotion-workflows-with-terraform-13c05bed953d).
 
