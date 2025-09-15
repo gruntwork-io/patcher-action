@@ -1,4 +1,5 @@
 # patcher-action
+
 A GitHub Action for running Patcher.
 
 > [!IMPORTANT]
@@ -11,7 +12,8 @@ You can find out more about Gruntwork Patcher at [gruntwork.io](https://gruntwor
 
 Refer to the [/examples/github/workflows](/examples/github/workflows) folder for use cases of the action.
 
-### Basic 
+### Basic
+
 It will run `patcher update` in the whole repo, and open a Pull Request with the changes.
 
 ```yaml
@@ -48,6 +50,7 @@ steps:
 | `no_color`               | Whether to disable color output.                                                                                                                                                                         | `false`                                        |
 
 ### Action outputs
+
 - `spec`: All discovered dependencies from the given directory using any filters. Only works for `report`.
 - `updateResult`: The result of the upgrade. Only works for `update`.
 
@@ -75,6 +78,7 @@ steps:
 The action supports GitHub Enterprise instances in addition to GitHub.com. You can configure the SCM provider using these inputs:
 
 #### GitHub Enterprise Example
+
 ```yaml
 steps:
   - uses: actions/checkout@v4
@@ -105,4 +109,3 @@ yarn test
 # build a release
 yarn build
 ```
-
