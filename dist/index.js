@@ -14210,6 +14210,11 @@ class AuthenticationManager {
                     this.currentProvider = this.githubAppProvider;
                     return this.githubAppProvider;
                 }
+                else {
+                    // Log warning when GitHub App is unhealthy
+                    core.warning("⚠️ GitHub App authentication unavailable: Health check failed");
+                    this.logFallbackEvent("github-app-unhealthy");
+                }
             }
             catch (error) {
                 core.warning(`⚠️ GitHub App authentication unavailable: ${error.message}`);
@@ -14227,7 +14232,10 @@ class AuthenticationManager {
             return this.patProvider;
         }
         // No healthy providers available
-        throw new interfaces_1.AuthenticationError("No healthy authentication providers available", interfaces_1.AuthErrorCode.PROVIDER_UNAVAILABLE, "hybrid", undefined, false);
+        const errorMessage = !this.config.patConfig.githubToken
+            ? "No authentication available: github_token not provided and GitHub App authentication unavailable"
+            : "No healthy authentication providers available";
+        throw new interfaces_1.AuthenticationError(errorMessage, interfaces_1.AuthErrorCode.PROVIDER_UNAVAILABLE, "hybrid", undefined, false);
     }
     /**
      * Get a token for a specific scope, with automatic provider selection
@@ -14356,10 +14364,7 @@ function parseAuthenticationConfig() {
     const githubAppTokenPath = core.getInput("github_app_token_path");
     const githubAppWriteTokenPath = core.getInput("github_app_write_token_path");
     const gruntworkApiBaseUrl = core.getInput("gruntwork_api_base_url");
-    // Validate required PAT for fallback
-    if (!githubToken) {
-        throw new Error("A 'github_token' input is required for authentication fallback");
-    }
+    // github_token is now optional - if not provided and GitHub App is down, action will fail
     const config = {
         githubAppConfig: {
             enabled: enableGithubApp,
@@ -14398,10 +14403,7 @@ exports.parseAuthenticationConfig = parseAuthenticationConfig;
  * Comprehensive configuration validation
  */
 function validateAuthenticationConfig(config) {
-    // Validate PAT configuration (required for fallback)
-    if (!config.patConfig.githubToken) {
-        throw new Error("github_token is required for authentication fallback");
-    }
+    // github_token is now optional - validation removed to allow failing when no auth available
     // Validate GitHub App configuration if enabled
     if (config.githubAppConfig.enabled) {
         const rawApiBaseUrl = core.getInput("gruntwork_api_base_url");
@@ -14412,27 +14414,49 @@ function validateAuthenticationConfig(config) {
         if (!rawTokenPath) {
             throw new Error("github_app_token_path is required when GitHub App authentication is enabled");
         }
-        // Validate URL format
-        try {
-            new URL(config.githubAppConfig.apiBaseUrl);
-        }
-        catch {
-            throw new Error("gruntwork_api_base_url must be a valid URL");
-        }
+        // Validate API URL format and security
+        validateSecureUrl(rawApiBaseUrl, "gruntwork_api_base_url");
         if (!config.githubAppConfig.audience) {
             throw new Error("GitHub App audience is required");
         }
     }
     // Validate GitHub base URL
-    if (config.patConfig.githubBaseUrl) {
-        try {
-            new URL(config.patConfig.githubBaseUrl);
-        }
-        catch {
-            throw new Error("github_base_url must be a valid URL");
-        }
+    const rawGithubBaseUrl = core.getInput("github_base_url");
+    if (rawGithubBaseUrl) {
+        validateSecureUrl(rawGithubBaseUrl, "github_base_url");
     }
     core.debug("Authentication configuration validation passed");
+}
+/**
+ * Validate URL format and security to prevent injection attacks
+ */
+function validateSecureUrl(urlString, parameterName) {
+    // First check for dangerous protocols before trying to parse as URL
+    const dangerousProtocols = ["javascript:", "data:", "file:", "ftp:", "ldap:", "gopher:"];
+    if (dangerousProtocols.some((protocol) => urlString.toLowerCase().startsWith(protocol))) {
+        throw new Error(`${parameterName} must be a valid URL`);
+    }
+    try {
+        const url = new URL(urlString);
+        // Basic hostname validation to prevent obvious malicious URLs
+        if (!url.hostname || url.hostname.length < 1) {
+            throw new Error(`${parameterName} must be a valid URL`);
+        }
+        // Only allow HTTPS URLs for security (except for localhost development)
+        const allowedProtocols = ["https:"];
+        if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+            allowedProtocols.push("http:");
+        }
+        if (!allowedProtocols.includes(url.protocol)) {
+            throw new Error(`${parameterName} must use HTTPS protocol (or HTTP for localhost)`);
+        }
+    }
+    catch (error) {
+        if (error instanceof Error && error.message.includes(parameterName)) {
+            throw error; // Re-throw our custom validation errors
+        }
+        throw new Error(`${parameterName} must be a valid URL`);
+    }
 }
 
 
@@ -14477,22 +14501,23 @@ const rest_1 = __nccwpck_require__(7620);
 const interfaces_1 = __nccwpck_require__(77);
 class GitHubAppProvider {
     constructor(config, retryConfig) {
-        this.tokenCache = new Map();
+        this.tokenCache = new Map(); // Cache by token path instead of scope
         this.config = config;
         this.retryConfig = retryConfig;
     }
     async getToken(scope) {
-        const cachedToken = this.tokenCache.get(scope);
+        const tokenPath = this.getTokenPath(scope);
+        const cachedToken = this.tokenCache.get(tokenPath);
         // Return cached token if valid and not near expiration
         if (cachedToken && this.isTokenValid(cachedToken)) {
-            core.debug(`Using cached GitHub App token for scope: ${scope}`);
+            core.debug(`Using cached GitHub App token for scope: ${scope} (path: ${tokenPath})`);
             return cachedToken.token;
         }
         // Fetch new token
-        core.debug(`Fetching new GitHub App token for scope: ${scope}`);
+        core.debug(`Fetching new GitHub App token for scope: ${scope} (path: ${tokenPath})`);
         const newToken = await this.fetchToken(scope);
-        // Cache the token
-        this.tokenCache.set(scope, newToken);
+        // Cache the token by path (so multiple scopes can share the same token)
+        this.tokenCache.set(tokenPath, newToken);
         // Mask the token immediately for security
         core.setSecret(newToken.token);
         return newToken.token;
@@ -14531,7 +14556,9 @@ class GitHubAppProvider {
             return response.ok;
         }
         catch (error) {
-            core.debug(`GitHub App health check failed: ${error}`);
+            // Sanitize error message to prevent token exposure
+            const sanitizedError = this.sanitizeErrorMessage(String(error));
+            core.debug(`GitHub App health check failed: ${sanitizedError}`);
             return false;
         }
     }
@@ -14573,7 +14600,9 @@ class GitHubAppProvider {
             },
         });
         if (!response.ok) {
-            throw new interfaces_1.AuthenticationError(`Provider token request failed: ${response.status} ${response.statusText}`, this.mapHttpStatusToErrorCode(response.status), "github-app", undefined, response.status >= 500 || response.status === 429);
+            // Sanitize error message to avoid exposing sensitive tokens
+            const sanitizedStatusText = this.sanitizeErrorMessage(response.statusText);
+            throw new interfaces_1.AuthenticationError(`Provider token request failed: ${response.status} ${sanitizedStatusText}`, this.mapHttpStatusToErrorCode(response.status), "github-app", undefined, response.status >= 500 || response.status === 429);
         }
         const data = await response.json();
         if (!data.token) {
@@ -14591,7 +14620,9 @@ class GitHubAppProvider {
             },
         });
         if (!response.ok) {
-            throw new interfaces_1.AuthenticationError(`GitHub token request failed: ${response.status} ${response.statusText}`, this.mapHttpStatusToErrorCode(response.status), "github-app", undefined, response.status >= 500 || response.status === 429);
+            // Sanitize error message to avoid exposing sensitive tokens
+            const sanitizedStatusText = this.sanitizeErrorMessage(response.statusText);
+            throw new interfaces_1.AuthenticationError(`GitHub token request failed: ${response.status} ${sanitizedStatusText}`, this.mapHttpStatusToErrorCode(response.status), "github-app", undefined, response.status >= 500 || response.status === 429);
         }
         const data = await response.json();
         if (!data.token) {
@@ -14643,6 +14674,11 @@ class GitHubAppProvider {
         }
     }
     isRetryableError(error) {
+        // Check if it's an AuthenticationError with retryable flag
+        if (error instanceof interfaces_1.AuthenticationError) {
+            return error.retryable;
+        }
+        // For other errors, check HTTP status codes
         const status = error.status || error.code;
         return status >= 500 || status === 429 || status === 408;
     }
@@ -14663,6 +14699,37 @@ class GitHubAppProvider {
             }
         }
         throw lastError;
+    }
+    /**
+     * Sanitize error messages to prevent sensitive token exposure
+     * Removes or masks potential tokens, secrets, and sensitive data
+     */
+    sanitizeErrorMessage(message) {
+        if (!message)
+            return "Unknown error";
+        // Pattern to match potential tokens and sensitive data
+        const sensitivePatterns = [
+            // JWT tokens (eyJ...)
+            /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+            // GitHub tokens (ghp_, gho_, ghs_, ghr_, github_pat_)
+            /gh[poshru]_[A-Za-z0-9_]+/g,
+            /github_pat_[A-Za-z0-9_]+/g,
+            // Generic secrets and tokens
+            /(?:token|secret|key|password|credential)[:\s=]+[A-Za-z0-9_-]+/gi,
+            // Bearer tokens
+            /Bearer\s+[A-Za-z0-9._-]+/gi,
+            // Base64 encoded data that might be sensitive
+            /[A-Za-z0-9+/]{20,}={0,2}/g,
+        ];
+        let sanitized = message;
+        // Replace sensitive patterns with [REDACTED]
+        sensitivePatterns.forEach((pattern) => {
+            sanitized = sanitized.replace(pattern, "[REDACTED]");
+        });
+        // Additional specific sanitization for common error patterns
+        sanitized = sanitized.replace(/Invalid OIDC token: [^\s]+/gi, "Invalid OIDC token: [REDACTED]");
+        sanitized = sanitized.replace(/Authentication failed with token [^\s]+/gi, "Authentication failed with token [REDACTED]");
+        return sanitized;
     }
 }
 exports.GitHubAppProvider = GitHubAppProvider;
@@ -14770,6 +14837,7 @@ class PATProvider {
     }
     async isHealthy() {
         // PAT is healthy if we have a github_token
+        // With optional github_token, this will return false when no token is provided
         return !!this.config.githubToken;
     }
     dispose() {
