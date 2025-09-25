@@ -29,7 +29,7 @@ export function parseAuthenticationConfig(): AuthManagerConfig {
   const config: AuthManagerConfig = {
     githubAppConfig: {
       enabled: enableGithubApp,
-      apiBaseUrl: gruntworkApiBaseUrl || "https://api.prod.app.gruntwork.io/api/v1",
+      apiBaseUrl: gruntworkApiBaseUrl || "https://api.prod.app.gruntwork.io",
       audience: "https://api.prod.app.gruntwork.io",
       githubBaseUrl,
       tokenPaths: {

@@ -84,7 +84,7 @@ export class GitHubAppProvider implements AuthenticationProvider {
       }
 
       // Verify API connectivity with a lightweight call
-      const response = await fetch(`${this.config.apiBaseUrl}/health`, {
+      const response = await fetch(`${this.config.apiBaseUrl}/api/health`, {
         method: "GET",
         headers: {
           "User-Agent": "patcher-action-github-app-provider/1.0",
@@ -141,7 +141,7 @@ export class GitHubAppProvider implements AuthenticationProvider {
   }
 
   private async getProviderToken(idToken: string): Promise<string> {
-    const response = await fetch(`${this.config.apiBaseUrl}/tokens/auth/login`, {
+    const response = await fetch(`${this.config.apiBaseUrl}/api/v1/tokens/auth/login`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${idToken}`,
@@ -177,7 +177,7 @@ export class GitHubAppProvider implements AuthenticationProvider {
   }
 
   private async getGitHubToken(providerToken: string, tokenPath: string): Promise<GitHubTokenResponse> {
-    const response = await fetch(`${this.config.apiBaseUrl}/tokens/pat/${tokenPath}`, {
+    const response = await fetch(`${this.config.apiBaseUrl}/api/v1/tokens/pat/${tokenPath}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${providerToken}`,

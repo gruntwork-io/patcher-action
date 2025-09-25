@@ -14368,7 +14368,7 @@ function parseAuthenticationConfig() {
     const config = {
         githubAppConfig: {
             enabled: enableGithubApp,
-            apiBaseUrl: gruntworkApiBaseUrl || "https://api.prod.app.gruntwork.io/api/v1",
+            apiBaseUrl: gruntworkApiBaseUrl || "https://api.prod.app.gruntwork.io",
             audience: "https://api.prod.app.gruntwork.io",
             githubBaseUrl,
             tokenPaths: {
@@ -14547,7 +14547,7 @@ class GitHubAppProvider {
                 return false;
             }
             // Verify API connectivity with a lightweight call
-            const response = await fetch(`${this.config.apiBaseUrl}/health`, {
+            const response = await fetch(`${this.config.apiBaseUrl}/api/health`, {
                 method: "GET",
                 headers: {
                     "User-Agent": "patcher-action-github-app-provider/1.0",
@@ -14591,7 +14591,7 @@ class GitHubAppProvider {
         });
     }
     async getProviderToken(idToken) {
-        const response = await fetch(`${this.config.apiBaseUrl}/tokens/auth/login`, {
+        const response = await fetch(`${this.config.apiBaseUrl}/api/v1/tokens/auth/login`, {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${idToken}`,
@@ -14611,7 +14611,7 @@ class GitHubAppProvider {
         return data.token;
     }
     async getGitHubToken(providerToken, tokenPath) {
-        const response = await fetch(`${this.config.apiBaseUrl}/tokens/pat/${tokenPath}`, {
+        const response = await fetch(`${this.config.apiBaseUrl}/api/v1/tokens/pat/${tokenPath}`, {
             method: "GET",
             headers: {
                 Authorization: `Bearer ${providerToken}`,

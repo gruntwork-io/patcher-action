@@ -41,7 +41,7 @@ inputs:
   gruntwork_api_base_url:
     description: "Base URL for Gruntwork API used for GitHub App authentication. Used when enable_github_app is true."
     required: false
-    default: "https://api.prod.app.gruntwork.io/api/v1"
+    default: "https://api.prod.app.gruntwork.io"
   patcher_command:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"
