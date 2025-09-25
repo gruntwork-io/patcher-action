@@ -8,7 +8,7 @@ branding:
 
 inputs:
   github_token:
-    description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions."
+    description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions. Required for fallback when GitHub App authentication is unavailable."
     required: false
   read_token:
     description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions. If left unset, github_token will be used."
@@ -24,6 +24,24 @@ inputs:
     description: "Organization name in GitHub where resources like the Patcher CLI can be downloaded. Defaults to 'gruntwork-io'."
     required: false
     default: "gruntwork-io"
+
+  # GitHub App authentication inputs
+  enable_github_app:
+    description: "Enable GitHub App authentication. When enabled, the action will attempt to use GitHub App tokens first, falling back to PAT if unavailable. Defaults to true."
+    required: false
+    default: "true"
+  github_app_token_path:
+    description: "Path to GitHub App token for read operations (e.g., 'patcher-read/gruntwork-io'). Used when enable_github_app is true."
+    required: false
+    default: "patcher-read/gruntwork-io"
+  github_app_write_token_path:
+    description: "Path to GitHub App token for write operations (e.g., 'patcher-write/gruntwork-io'). Used when enable_github_app is true."
+    required: false
+    default: "patcher-write/gruntwork-io"
+  gruntwork_api_base_url:
+    description: "Base URL for Gruntwork API used for GitHub App authentication. Used when enable_github_app is true."
+    required: false
+    default: "https://api.prod.app.gruntwork.io/api/v1"
   patcher_command:
     description: "Patcher command to run. Valid options: 'update' or 'report'."
     default: "update"

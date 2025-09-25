@@ -6,7 +6,12 @@ import * as toolCache from "@actions/tool-cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 import { Octokit } from "@octokit/rest";
-import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/types";
+import {
+  AuthenticationManager,
+  parseAuthenticationConfig,
+  createAuthenticatedGitHubProvider,
+  TokenScope,
+} from "./auth";
 
 // Define constants
 
@@ -79,8 +84,6 @@ type PatcherCliArgs = {
   prTitle: string;
   dependency: string;
   workingDir: string;
-  readToken: string;
-  updateToken: string;
   dryRun: boolean;
   noColor: boolean;
 };
@@ -144,7 +147,7 @@ async function setupBinaryInEnv(binary: DownloadedBinary) {
 }
 
 class GitHubProvider implements GitHubProviderInterface {
-  private octokit: GitHub;
+  private octokit: Octokit;
 
   constructor(config: GitHubConfig) {
     // Use Octokit directly to bypass @actions/github HTTP protocol restrictions (HTTPS is otherwise required)
@@ -393,7 +396,7 @@ async function downloadGitHubBinary(
 async function downloadAndSetupTooling(
   userGitHubProvider: GitHubProviderInterface,
   githubComProvider: GitHubProviderInterface,
-  userToken: string
+  authManager: AuthenticationManager
 ) {
   const tools = [
     { org: PATCHER_ORG, repo: PATCHER_GIT_REPO, version: PATCHER_VERSION },
@@ -407,12 +410,13 @@ async function downloadAndSetupTooling(
     const isGruntworkTool = GRUNTWORK_TOOLS.includes(repo as any);
 
     const githubProvider = isPublicTool ? githubComProvider : userGitHubProvider;
-    const token = userToken || "";
+    const token = await authManager.getToken(TokenScope.DOWNLOAD);
+    const providerType = await authManager.getProviderType();
     const toolType = isPublicTool ? "Public" : isGruntworkTool ? "Gruntwork" : "User";
     core.debug(
-      `Tool ${org}/${repo}@${version}: type=${toolType} provider=${isPublicTool ? "github.com" : "user"} token=${
-        token ? "present" : "none"
-      }`
+      `Tool ${org}/${repo}@${version}: type=${toolType} provider=${
+        isPublicTool ? "github.com" : "user"
+      } auth=${providerType} token=${token ? "present" : "none"}`
     );
 
     if (!isPublicTool) {
@@ -535,12 +539,19 @@ function updateArgs(
   return args.concat([workingDir]);
 }
 
-function getPatcherEnvVars(
+async function getPatcherEnvVars(
   gitCommiter: GitCommitter,
-  readToken: string,
-  updateToken: string,
+  authManager: AuthenticationManager,
   extra?: { [key: string]: string }
-): { [key: string]: string } {
+): Promise<{ [key: string]: string }> {
+  // Get tokens using authentication manager
+  const readToken = await authManager.getToken(TokenScope.READ);
+  const writeToken = await authManager.getToken(TokenScope.WRITE);
+  const providerType = await authManager.getProviderType();
+
+  // Log authentication method for visibility
+  core.info(`Patcher environment configured with ${providerType} authentication`);
+
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
   // this is a workaround to get the version from the package.json file, since rootDir doesn't contain the package.json file
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -550,8 +561,9 @@ function getPatcherEnvVars(
     ...process.env,
     ...(extra || {}),
     GITHUB_OAUTH_TOKEN: readToken,
-    GITHUB_PUBLISH_TOKEN: updateToken,
+    GITHUB_PUBLISH_TOKEN: writeToken,
     PATCHER_TELEMETRY_ID: telemetryId,
+    PATCHER_AUTH_TYPE: providerType, // New telemetry field
     GIT_AUTHOR_NAME: gitCommiter.name,
     GIT_AUTHOR_EMAIL: gitCommiter.email,
     PATCHER_ACTIONS_VERSION: `v${packageJson.version}`,
@@ -561,7 +573,11 @@ function getPatcherEnvVars(
 async function runPatcher(
   gitCommiter: GitCommitter,
   command: string,
-  {
+  args: PatcherCliArgs,
+  authManager: AuthenticationManager,
+  extraEnv?: { [key: string]: string }
+): Promise<void> {
+  const {
     specFile,
     includeDirs,
     excludeDirs,
@@ -570,13 +586,9 @@ async function runPatcher(
     prTitle,
     dependency,
     workingDir,
-    readToken,
-    updateToken,
     dryRun,
     noColor,
-  }: PatcherCliArgs,
-  extraEnv?: { [key: string]: string }
-): Promise<void> {
+  } = args;
   switch (command) {
     case REPORT_COMMAND: {
       core.startGroup("Running 'patcher report'");
@@ -584,7 +596,7 @@ async function runPatcher(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+          env: await getPatcherEnvVars(gitCommiter, authManager, extraEnv),
         }
       );
       core.endGroup();
@@ -612,7 +624,7 @@ async function runPatcher(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+          env: await getPatcherEnvVars(gitCommiter, authManager, extraEnv),
         }
       );
       core.endGroup();
@@ -649,84 +661,83 @@ async function validateAccessToPatcherCli(githubProvider: GitHubProviderInterfac
 }
 
 export async function run() {
-  const githubToken = core.getInput("github_token");
-  const patcherReadToken = core.getInput("read_token");
-  const patcherUpdateToken = core.getInput("update_token");
+  let authManager: AuthenticationManager;
 
-  if (!githubToken) {
-    throw new Error("A 'github_token' input is required");
+  try {
+    // Parse authentication configuration
+    const authConfig = parseAuthenticationConfig();
+    authManager = new AuthenticationManager(authConfig);
+
+    // Get other inputs (unchanged)
+    const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
+    const command = core.getInput("patcher_command");
+    const updateStrategy = core.getInput("update_strategy");
+    const dependency = core.getInput("dependency");
+    const workingDir = core.getInput("working_dir");
+    const commitAuthor = core.getInput("commit_author");
+    const specFile = core.getInput("spec_file");
+    const includeDirs = core.getInput("include_dirs");
+    const excludeDirs = core.getInput("exclude_dirs");
+    const prBranch = core.getInput("pull_request_branch");
+    const prTitle = core.getInput("pull_request_title");
+    const dryRun = core.getBooleanInput("dry_run");
+    const noColor = core.getBooleanInput("no_color");
+    const githubOrg = core.getInput("github_org") || "gruntwork-io";
+    const extraEnv: { [key: string]: string } = {};
+    if (githubBaseUrl) extraEnv.GITHUB_BASE_URL = githubBaseUrl;
+    if (githubOrg) extraEnv.GITHUB_ORG = githubOrg;
+
+    // Validate if the 'patcher_command' provided is valid.
+    if (!isPatcherCommandValid(command)) {
+      throw new Error(`Invalid Patcher command ${command}`);
+    }
+    core.info(`Patcher's '${command}' command will be executed.`);
+
+    // Validate if 'commit_author' has a valid format.
+    const gitCommiter = parseCommitAuthor(commitAuthor);
+
+    // Create authenticated GitHub providers
+    core.debug(`Configured github_base_url: ${githubBaseUrl}`);
+    core.debug(`Configured github_org: ${githubOrg}`);
+    core.debug(`GitHub.com provider fixed baseUrl: https://github.com`);
+
+    const userGitHubProvider = await createAuthenticatedGitHubProvider(authManager, githubBaseUrl);
+    const githubComProvider = await createAuthenticatedGitHubProvider(authManager, "https://github.com");
+
+    // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
+    await validateAccessToPatcherCli(userGitHubProvider);
+
+    // Download and setup tooling with enhanced authentication
+    core.startGroup("Downloading Patcher and patch tools");
+    await downloadAndSetupTooling(userGitHubProvider, githubComProvider, authManager);
+    core.endGroup();
+
+    // Run Patcher with enhanced authentication
+    await runPatcher(
+      gitCommiter,
+      command,
+      {
+        specFile,
+        includeDirs,
+        excludeDirs,
+        updateStrategy,
+        prBranch,
+        prTitle,
+        dependency,
+        workingDir,
+        dryRun,
+        noColor,
+      },
+      authManager,
+      extraEnv
+    );
+  } catch (error: any) {
+    core.setFailed(error.message);
+    throw error;
+  } finally {
+    // Clean up authentication resources
+    if (authManager!) {
+      authManager.dispose();
+    }
   }
-
-  const readToken = patcherReadToken || githubToken;
-  const updateToken = patcherUpdateToken || githubToken;
-  const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
-  const command = core.getInput("patcher_command");
-  const updateStrategy = core.getInput("update_strategy");
-  const dependency = core.getInput("dependency");
-  const workingDir = core.getInput("working_dir");
-  const commitAuthor = core.getInput("commit_author");
-  const specFile = core.getInput("spec_file");
-  const includeDirs = core.getInput("include_dirs");
-  const excludeDirs = core.getInput("exclude_dirs");
-  const prBranch = core.getInput("pull_request_branch");
-  const prTitle = core.getInput("pull_request_title");
-  const dryRun = core.getBooleanInput("dry_run");
-  const noColor = core.getBooleanInput("no_color");
-  const githubOrg = core.getInput("github_org") || "gruntwork-io";
-  const extraEnv: { [key: string]: string } = {};
-  if (githubBaseUrl) extraEnv.GITHUB_BASE_URL = githubBaseUrl;
-  if (githubOrg) extraEnv.GITHUB_ORG = githubOrg;
-
-  // Always mask the token strings in the logs.
-  core.setSecret(githubToken);
-  core.setSecret(readToken);
-  core.setSecret(updateToken);
-
-  const githubConfig: GitHubConfig = {
-    baseUrl: githubBaseUrl,
-    apiVersion: "v3",
-    token: githubToken,
-  };
-
-  const userGitHubProvider = createGitHubProvider(githubConfig);
-  core.debug(`Configured github_base_url: ${githubBaseUrl}`);
-  core.debug(`Configured github_org: ${githubOrg}`);
-  core.debug(`GitHub.com provider fixed baseUrl: https://github.com`);
-  const githubComConfig: GitHubConfig = {
-    baseUrl: "https://github.com",
-    apiVersion: "v3",
-    token: githubToken,
-  };
-  const githubComProvider = createGitHubProvider(githubComConfig);
-
-  // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
-  await validateAccessToPatcherCli(userGitHubProvider);
-
-  // Validate if the 'patcher_command' provided is valid.
-  if (!isPatcherCommandValid(command)) {
-    throw new Error(`Invalid Patcher command ${command}`);
-  }
-  core.info(`Patcher's ${command}' command will be executed.`);
-
-  // Validate if 'commit_author' has a valid format.
-  const gitCommiter = parseCommitAuthor(commitAuthor);
-
-  core.startGroup("Downloading Patcher and patch tools");
-  await downloadAndSetupTooling(userGitHubProvider, githubComProvider, readToken);
-  core.endGroup();
-
-  await runPatcher(gitCommiter, command, {
-    specFile,
-    includeDirs,
-    excludeDirs,
-    updateStrategy,
-    prBranch,
-    prTitle,
-    dependency,
-    workingDir,
-    readToken,
-    updateToken,
-    dryRun,
-    noColor,
-  });
 }
