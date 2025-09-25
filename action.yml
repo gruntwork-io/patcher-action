@@ -8,7 +8,7 @@ branding:
 
 inputs:
   github_token:
-    description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions. Required for fallback when GitHub App authentication is unavailable."
+    description: "Personal Access Token (PAT) used to download binaries and publish pull requests. Optional - if not provided and GitHub App authentication is unavailable, the action will fail. For GitHub, use a Personal Access Token with appropriate repository permissions."
     required: false
   read_token:
     description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions. If left unset, github_token will be used."

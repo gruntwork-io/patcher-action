@@ -24,10 +24,7 @@ export function parseAuthenticationConfig(): AuthManagerConfig {
   const githubAppWriteTokenPath = core.getInput("github_app_write_token_path");
   const gruntworkApiBaseUrl = core.getInput("gruntwork_api_base_url");
 
-  // Validate required PAT for fallback
-  if (!githubToken) {
-    throw new Error("A 'github_token' input is required for authentication fallback");
-  }
+  // github_token is now optional - if not provided and GitHub App is down, action will fail
 
   const config: AuthManagerConfig = {
     githubAppConfig: {
@@ -69,10 +66,7 @@ export function parseAuthenticationConfig(): AuthManagerConfig {
  * Comprehensive configuration validation
  */
 function validateAuthenticationConfig(config: AuthManagerConfig): void {
-  // Validate PAT configuration (required for fallback)
-  if (!config.patConfig.githubToken) {
-    throw new Error("github_token is required for authentication fallback");
-  }
+  // github_token is now optional - validation removed to allow failing when no auth available
 
   // Validate GitHub App configuration if enabled
   if (config.githubAppConfig.enabled) {

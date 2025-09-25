@@ -73,8 +73,12 @@ export class AuthenticationManager {
     }
 
     // No healthy providers available
+    const errorMessage = !this.config.patConfig.githubToken
+      ? "No authentication available: github_token not provided and GitHub App authentication unavailable"
+      : "No healthy authentication providers available";
+
     throw new AuthenticationError(
-      "No healthy authentication providers available",
+      errorMessage,
       AuthErrorCode.PROVIDER_UNAVAILABLE,
       "hybrid",
       undefined,

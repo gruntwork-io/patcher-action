@@ -94,6 +94,7 @@ export class PATProvider implements AuthenticationProvider {
 
   async isHealthy(): Promise<boolean> {
     // PAT is healthy if we have a github_token
+    // With optional github_token, this will return false when no token is provided
     return !!this.config.githubToken;
   }
 
