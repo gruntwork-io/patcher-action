@@ -13886,28 +13886,34 @@ function updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, wor
     }
     return args.concat([workingDir]);
 }
-function getPatcherEnvVars(gitCommiter, readToken, updateToken, extra) {
+function getPatcherEnvVars(gitCommiter, readToken, executeToken, debug, extra) {
     const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
     // this is a workaround to get the version from the package.json file, since rootDir doesn't contain the package.json file
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const packageJson = __nccwpck_require__(4147);
-    return {
+    const envVars = {
         ...process.env,
         ...(extra || {}),
         GITHUB_OAUTH_TOKEN: readToken,
-        GITHUB_PUBLISH_TOKEN: updateToken,
+        GITHUB_PUBLISH_TOKEN: executeToken,
         PATCHER_TELEMETRY_ID: telemetryId,
         GIT_AUTHOR_NAME: gitCommiter.name,
         GIT_AUTHOR_EMAIL: gitCommiter.email,
         PATCHER_ACTIONS_VERSION: `v${packageJson.version}`,
     };
+    if (debug) {
+        envVars.PATCHER_LOG_LEVEL = "debug";
+        envVars.PATCHER_DEBUG = "1";
+        core.info("Debug logging enabled for patcher (PATCHER_LOG_LEVEL=debug, PATCHER_DEBUG=1)");
+    }
+    return envVars;
 }
-async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, readToken, updateToken, dryRun, noColor, }, extraEnv) {
+async function runPatcher(gitCommiter, command, { specFile, includeDirs, excludeDirs, updateStrategy, prBranch, prTitle, dependency, workingDir, readToken, executeToken, dryRun, noColor, debug, }, extraEnv) {
     switch (command) {
         case REPORT_COMMAND: {
             core.startGroup("Running 'patcher report'");
             const reportOutput = await exec.getExecOutput("patcher", reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor), {
-                env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+                env: getPatcherEnvVars(gitCommiter, readToken, executeToken, debug, extraEnv),
             });
             core.endGroup();
             core.startGroup("Setting upgrade spec output");
@@ -13928,7 +13934,7 @@ async function runPatcher(gitCommiter, command, { specFile, includeDirs, exclude
             }
             core.startGroup(groupName);
             const updateOutput = await exec.getExecOutput("patcher", updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor), {
-                env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+                env: getPatcherEnvVars(gitCommiter, readToken, executeToken, debug, extraEnv),
             });
             core.endGroup();
             core.startGroup("Setting 'updateResult' output");
@@ -13954,14 +13960,11 @@ async function validateAccessToPatcherCli(githubProvider) {
     await githubProvider.validateAccess(PATCHER_ORG, PATCHER_GIT_REPO);
 }
 async function run() {
-    const githubToken = core.getInput("github_token");
-    const patcherReadToken = core.getInput("read_token");
-    const patcherUpdateToken = core.getInput("update_token");
-    if (!githubToken) {
-        throw new Error("A 'github_token' input is required");
+    const readToken = core.getInput("PIPELINES_READ_TOKEN");
+    const executeToken = core.getInput("PIPELINES_EXECUTE_TOKEN") || readToken;
+    if (!readToken) {
+        throw new Error("A 'PIPELINES_READ_TOKEN' input is required");
     }
-    const readToken = patcherReadToken || githubToken;
-    const updateToken = patcherUpdateToken || githubToken;
     const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
     const command = core.getInput("patcher_command");
     const updateStrategy = core.getInput("update_strategy");
@@ -13975,6 +13978,7 @@ async function run() {
     const prTitle = core.getInput("pull_request_title");
     const dryRun = core.getBooleanInput("dry_run");
     const noColor = core.getBooleanInput("no_color");
+    const debug = core.getBooleanInput("debug");
     const githubOrg = core.getInput("github_org") || "gruntwork-io";
     const extraEnv = {};
     if (githubBaseUrl)
@@ -13982,13 +13986,12 @@ async function run() {
     if (githubOrg)
         extraEnv.GITHUB_ORG = githubOrg;
     // Always mask the token strings in the logs.
-    core.setSecret(githubToken);
     core.setSecret(readToken);
-    core.setSecret(updateToken);
+    core.setSecret(executeToken);
     const githubConfig = {
         baseUrl: githubBaseUrl,
         apiVersion: "v3",
-        token: githubToken,
+        token: readToken,
     };
     const userGitHubProvider = createGitHubProvider(githubConfig);
     core.debug(`Configured github_base_url: ${githubBaseUrl}`);
@@ -13997,7 +14000,7 @@ async function run() {
     const githubComConfig = {
         baseUrl: "https://github.com",
         apiVersion: "v3",
-        token: githubToken,
+        token: readToken,
     };
     const githubComProvider = createGitHubProvider(githubComConfig);
     // Only run the action if the user has access to Patcher. Otherwise, the download won't work.
@@ -14022,9 +14025,10 @@ async function run() {
         dependency,
         workingDir,
         readToken,
-        updateToken,
+        executeToken,
         dryRun,
         noColor,
+        debug,
     });
 }
 exports.run = run;
@@ -18254,7 +18258,7 @@ module.exports = JSON.parse('[[[0,44],"disallowed_STD3_valid"],[[45,46],"valid"]
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse('{"name":"patcher-action","version":"3.0.0","description":"Run Patcher by Gruntwork.io","main":"index.js","repository":"git@github.com:gruntwork-io/patcher-action.git","author":"Gruntwork.io <grunty@gruntwork.io>","license":"Apache-2.0","scripts":{"build":"ncc build src/index.ts -o dist","format":"prettier --write **/*.ts","format-check":"prettier --check **/*.ts","lint":"eslint --ext .ts ./"},"dependencies":{"@actions/core":"^1.10.0","@actions/exec":"^1.1.1","@actions/github":"^5.1.1","@actions/tool-cache":"^2.0.1","@octokit/plugin-throttling":"^7.0.0","@octokit/rest":"^22.0.0"},"devDependencies":{"@types/node":"^20.5.0","@typescript-eslint/eslint-plugin":"^6.6.0","@typescript-eslint/parser":"^6.6.0","@vercel/ncc":"^0.36.1","eslint":"^8.48.0","eslint-config-prettier":"^9.0.0","eslint-plugin-prettier":"^5.0.0","prettier":"^3.0.3","typescript":"^5.2.2"}}');
+module.exports = JSON.parse('{"name":"patcher-action","version":"3.2.0","description":"Run Patcher by Gruntwork.io","main":"index.js","repository":"git@github.com:gruntwork-io/patcher-action.git","author":"Gruntwork.io <grunty@gruntwork.io>","license":"Apache-2.0","scripts":{"build":"ncc build src/index.ts -o dist","format":"prettier --write **/*.ts","format-check":"prettier --check **/*.ts","lint":"eslint --ext .ts ./"},"dependencies":{"@actions/core":"^1.10.0","@actions/exec":"^1.1.1","@actions/github":"^5.1.1","@actions/tool-cache":"^2.0.1","@octokit/plugin-throttling":"^7.0.0","@octokit/rest":"^22.0.0"},"devDependencies":{"@types/node":"^20.5.0","@typescript-eslint/eslint-plugin":"^6.6.0","@typescript-eslint/parser":"^6.6.0","@vercel/ncc":"^0.36.1","eslint":"^8.48.0","eslint-config-prettier":"^9.0.0","eslint-plugin-prettier":"^5.0.0","prettier":"^3.0.3","typescript":"^5.2.2"}}');
 
 /***/ })
 
