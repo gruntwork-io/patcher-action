@@ -80,7 +80,7 @@ type PatcherCliArgs = {
   dependency: string;
   workingDir: string;
   readToken: string;
-  updateToken: string;
+  executeToken: string;
   dryRun: boolean;
   noColor: boolean;
   debug: boolean;
@@ -539,7 +539,7 @@ function updateArgs(
 function getPatcherEnvVars(
   gitCommiter: GitCommitter,
   readToken: string,
-  updateToken: string,
+  executeToken: string,
   debug: boolean,
   extra?: { [key: string]: string }
 ): { [key: string]: string } {
@@ -552,7 +552,7 @@ function getPatcherEnvVars(
     ...process.env,
     ...(extra || {}),
     GITHUB_OAUTH_TOKEN: readToken,
-    GITHUB_PUBLISH_TOKEN: updateToken,
+    GITHUB_PUBLISH_TOKEN: executeToken,
     PATCHER_TELEMETRY_ID: telemetryId,
     GIT_AUTHOR_NAME: gitCommiter.name,
     GIT_AUTHOR_EMAIL: gitCommiter.email,
@@ -581,7 +581,7 @@ async function runPatcher(
     dependency,
     workingDir,
     readToken,
-    updateToken,
+    executeToken,
     dryRun,
     noColor,
     debug,
@@ -595,7 +595,7 @@ async function runPatcher(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, debug, extraEnv),
+          env: getPatcherEnvVars(gitCommiter, readToken, executeToken, debug, extraEnv),
         }
       );
       core.endGroup();
@@ -623,7 +623,7 @@ async function runPatcher(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, debug, extraEnv),
+          env: getPatcherEnvVars(gitCommiter, readToken, executeToken, debug, extraEnv),
         }
       );
       core.endGroup();
@@ -660,16 +660,12 @@ async function validateAccessToPatcherCli(githubProvider: GitHubProviderInterfac
 }
 
 export async function run() {
-  const githubToken = core.getInput("github_token");
-  const patcherReadToken = core.getInput("read_token");
-  const patcherUpdateToken = core.getInput("update_token");
+  const readToken = core.getInput("PIPELINES_READ_TOKEN");
+  const executeToken = core.getInput("PIPELINES_EXECUTE_TOKEN") || readToken;
 
-  if (!githubToken) {
-    throw new Error("A 'github_token' input is required");
+  if (!readToken) {
+    throw new Error("A 'PIPELINES_READ_TOKEN' input is required");
   }
-
-  const readToken = patcherReadToken || githubToken;
-  const updateToken = patcherUpdateToken || githubToken;
   const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
   const command = core.getInput("patcher_command");
   const updateStrategy = core.getInput("update_strategy");
@@ -690,14 +686,13 @@ export async function run() {
   if (githubOrg) extraEnv.GITHUB_ORG = githubOrg;
 
   // Always mask the token strings in the logs.
-  core.setSecret(githubToken);
   core.setSecret(readToken);
-  core.setSecret(updateToken);
+  core.setSecret(executeToken);
 
   const githubConfig: GitHubConfig = {
     baseUrl: githubBaseUrl,
     apiVersion: "v3",
-    token: githubToken,
+    token: readToken,
   };
 
   const userGitHubProvider = createGitHubProvider(githubConfig);
@@ -707,7 +702,7 @@ export async function run() {
   const githubComConfig: GitHubConfig = {
     baseUrl: "https://github.com",
     apiVersion: "v3",
-    token: githubToken,
+    token: readToken,
   };
   const githubComProvider = createGitHubProvider(githubComConfig);
 
@@ -737,7 +732,7 @@ export async function run() {
     dependency,
     workingDir,
     readToken,
-    updateToken,
+    executeToken,
     dryRun,
     noColor,
     debug,
