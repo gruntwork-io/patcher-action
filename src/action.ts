@@ -83,6 +83,7 @@ type PatcherCliArgs = {
   updateToken: string;
   dryRun: boolean;
   noColor: boolean;
+  debug: boolean;
 };
 
 type GitCommitter = {
@@ -539,6 +540,7 @@ function getPatcherEnvVars(
   gitCommiter: GitCommitter,
   readToken: string,
   updateToken: string,
+  debug: boolean,
   extra?: { [key: string]: string }
 ): { [key: string]: string } {
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
@@ -546,7 +548,7 @@ function getPatcherEnvVars(
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const packageJson = require("../package.json");
 
-  return {
+  const envVars: { [key: string]: string } = {
     ...process.env,
     ...(extra || {}),
     GITHUB_OAUTH_TOKEN: readToken,
@@ -556,6 +558,14 @@ function getPatcherEnvVars(
     GIT_AUTHOR_EMAIL: gitCommiter.email,
     PATCHER_ACTIONS_VERSION: `v${packageJson.version}`,
   };
+
+  if (debug) {
+    envVars.PATCHER_LOG_LEVEL = "debug";
+    envVars.PATCHER_DEBUG = "1";
+    core.info("Debug logging enabled for patcher (PATCHER_LOG_LEVEL=debug, PATCHER_DEBUG=1)");
+  }
+
+  return envVars;
 }
 
 async function runPatcher(
@@ -574,6 +584,7 @@ async function runPatcher(
     updateToken,
     dryRun,
     noColor,
+    debug,
   }: PatcherCliArgs,
   extraEnv?: { [key: string]: string }
 ): Promise<void> {
@@ -584,7 +595,7 @@ async function runPatcher(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, debug, extraEnv),
         }
       );
       core.endGroup();
@@ -612,7 +623,7 @@ async function runPatcher(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, debug, extraEnv),
         }
       );
       core.endGroup();
@@ -672,6 +683,7 @@ export async function run() {
   const prTitle = core.getInput("pull_request_title");
   const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
+  const debug = core.getBooleanInput("debug");
   const githubOrg = core.getInput("github_org") || "gruntwork-io";
   const extraEnv: { [key: string]: string } = {};
   if (githubBaseUrl) extraEnv.GITHUB_BASE_URL = githubBaseUrl;
@@ -728,5 +740,6 @@ export async function run() {
     updateToken,
     dryRun,
     noColor,
+    debug,
   });
 }

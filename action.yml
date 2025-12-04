@@ -86,6 +86,9 @@ inputs:
   no_color:
     description: "Disable color output. Defaults to false."
     default: "false"
+  debug:
+    description: "Enable debug logging for patcher. Sets PATCHER_LOG_LEVEL=debug and PATCHER_DEBUG=1. Defaults to false."
+    default: "false"
 
 outputs:
   dependencies:
