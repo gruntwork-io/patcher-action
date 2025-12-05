@@ -68,6 +68,7 @@ jobs:
         id: run-update
         with:
           PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+          PIPELINES_EXECUTE_TOKEN: ${{ secrets.PIPELINES_EXECUTE_TOKEN }}
           patcher_command: update
           working_dir: ./
           spec_file: spec.json
