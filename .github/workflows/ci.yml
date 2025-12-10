@@ -50,9 +50,9 @@ jobs:
         id: run-report
         uses: ./
         with:
-          PIPELINES_READ_TOKEN: ${{ secrets.PATCHER_FULL_REPO }}
+          PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
           patcher_command: report
-          patcher_version: v0.15.2
+          patcher_version: v0.17.0
           working_dir: infrastructure-live
           spec_file: spec.json
           include_dirs: "{*dev*}/**"
@@ -80,10 +80,10 @@ jobs:
         id: run-update
         uses: ./
         with:
-          PIPELINES_READ_TOKEN: ${{ secrets.PATCHER_FULL_REPO }}
-          PIPELINES_EXECUTE_TOKEN: ${{ secrets.PATCHER_FULL_REPO }}
+          PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+          PIPELINES_EXECUTE_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
           patcher_command: update
-          patcher_version: v0.15.2
+          patcher_version: v0.17.0
           working_dir: infrastructure-live
           spec_file: spec.json
           pull_request_title: "[Patcher] [dev] Update ${{ matrix.ID }}"
