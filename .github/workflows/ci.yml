@@ -46,11 +46,17 @@ jobs:
       spec: ${{ steps.run-report.outputs.spec }}
     steps:
       - uses: actions/checkout@v4
+      - name: Fetch Pipelines Read Token
+        id: pipelines-read-token
+        uses: ./pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: pipelines-read/${{ github.repository_owner }}
+          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
       - name: Patcher
         id: run-report
         uses: ./
         with:
-          PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+          PIPELINES_READ_TOKEN: ${{ steps.pipelines-read-token.outputs.PIPELINES_TOKEN }}
           patcher_command: report
           patcher_version: v0.17.0
           working_dir: infrastructure-live
@@ -76,12 +82,24 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: spec-file
+      - name: Fetch Pipelines Read Token
+        id: pipelines-read-token
+        uses: ./pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: pipelines-read/${{ github.repository_owner }}
+          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+      - name: Fetch Pipelines Execute Token
+        id: pipelines-exec-token
+        uses: ./pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: propose-infra-change/${{ github.repository_owner }}
+          FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
       - name: Patcher
         id: run-update
         uses: ./
         with:
-          PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
-          PIPELINES_EXECUTE_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
+          PIPELINES_READ_TOKEN: ${{ steps.pipelines-read-token.outputs.PIPELINES_TOKEN }}
+          PIPELINES_EXECUTE_TOKEN: ${{ steps.pipelines-exec-token.outputs.PIPELINES_TOKEN }}
           patcher_command: update
           patcher_version: v0.17.0
           working_dir: infrastructure-live
