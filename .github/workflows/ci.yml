@@ -40,71 +40,67 @@ jobs:
             exit 1
           fi
 
-  patcher-report-dev:
+  patcher-report:
+    if: github.event_name == 'repository_dispatch' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
-      spec: ${{ steps.run-report.outputs.spec }}
+      spec: ${{ steps.get-spec.outputs.spec }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Fetch Pipelines Read Token
         id: pipelines-read-token
         uses: gruntwork-io/pipelines-credentials@main
         with:
-          PIPELINES_TOKEN_PATH: pipelines-read/${{ github.repository_owner }}
+          PIPELINES_TOKEN_PATH: "pipelines-read/gruntwork-io"
           FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
-      - name: Patcher
-        id: run-report
-        uses: ./
-        with:
-          PIPELINES_READ_TOKEN: ${{ steps.pipelines-read-token.outputs.PIPELINES_TOKEN }}
-          patcher_command: report
-          patcher_version: v0.17.0
-          working_dir: infrastructure-live
-          spec_file: spec.json
-          include_dirs: "{*dev*}/**"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: spec-file
-          path: spec.json
 
-  patcher-update-dev:
-    # Runs patcher update against each dependency for the specified accounts in dry run mode.
-    needs: [patcher-report-dev]
+      - uses: gruntwork-io/patcher-action@patcher-debug
+        id: get-spec
+        with:
+          patcher_command: report
+          PIPELINES_READ_TOKEN: ${{ steps.pipelines-read-token.outputs.PIPELINES_TOKEN }}
+          include_dirs: "infrastructure-live/**"
+          working_dir: ${{ github.workspace }}
+          spec_file: /tmp/patcher-spec.json
+
+  update-env:
+    needs: [patcher-report]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
-        include: ${{ fromJson(needs.patcher-report-dev.outputs.spec).Dependencies }}
+        dependency: ${{ fromJson(needs.patcher-report.outputs.spec).Dependencies }}
     steps:
       - uses: actions/checkout@v4
-      - name: Load spec file
-        uses: actions/download-artifact@v4
-        with:
-          name: spec-file
+
       - name: Fetch Pipelines Read Token
         id: pipelines-read-token
         uses: gruntwork-io/pipelines-credentials@main
         with:
-          PIPELINES_TOKEN_PATH: pipelines-read/${{ github.repository_owner }}
+          PIPELINES_TOKEN_PATH: "pipelines-read/gruntwork-io"
           FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+
       - name: Fetch Pipelines Execute Token
-        id: pipelines-exec-token
+        id: pipelines-infra-root-write-token
         uses: gruntwork-io/pipelines-credentials@main
         with:
-          PIPELINES_TOKEN_PATH: propose-infra-change/${{ github.repository_owner }}
-          FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
-      - name: Patcher
-        id: run-update
-        uses: ./
+          PIPELINES_TOKEN_PATH: "infra-root-write/${{ github.repository_owner }}"
+          FALLBACK_TOKEN: ${{ secrets.INFRA_ROOT_WRITE_TOKEN }}
+
+      - name: Create the spec file
+        shell: bash
+        run: |
+          echo '${{ needs.patcher-report.outputs.spec }}' > /tmp/patcher-spec.json
+
+      - uses: gruntwork-io/patcher-action@patcher-debug
         with:
-          PIPELINES_READ_TOKEN: ${{ steps.pipelines-read-token.outputs.PIPELINES_TOKEN }}
-          PIPELINES_EXECUTE_TOKEN: ${{ steps.pipelines-exec-token.outputs.PIPELINES_TOKEN }}
           patcher_command: update
-          patcher_version: v0.17.0
-          working_dir: infrastructure-live
-          spec_file: spec.json
-          pull_request_title: "[Patcher] [dev] Update ${{ matrix.ID }}"
-          pull_request_branch: "patcher-dev-updates-${{ matrix.ID }}"
-          dependency: ${{ matrix.ID }}
+          PIPELINES_READ_TOKEN: ${{ steps.pipelines-read-token.outputs.PIPELINES_TOKEN }}
+          PIPELINES_EXECUTE_TOKEN: ${{ steps.pipelines-infra-root-write-token.outputs.PIPELINES_TOKEN }}
+          working_dir: ${{ github.workspace }}
+          dependency: ${{ matrix.dependency.ID }}
+          spec_file: /tmp/patcher-spec.json
+          pull_request_title: "[Patcher] [dev] Update ${{ matrix.dependency.ID }}"
+          pull_request_branch: "${{ env.PR_BRANCH_PREFIX }}${{ matrix.dependency.ID }}"
           dry_run: true
