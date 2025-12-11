@@ -6,7 +6,6 @@ import * as toolCache from "@actions/tool-cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 import { Octokit } from "@octokit/rest";
-import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/types";
 
 // Define constants
 
@@ -145,7 +144,7 @@ async function setupBinaryInEnv(binary: DownloadedBinary) {
 }
 
 class GitHubProvider implements GitHubProviderInterface {
-  private octokit: GitHub;
+  private octokit: Octokit;
 
   constructor(config: GitHubConfig) {
     // Use Octokit directly to bypass @actions/github HTTP protocol restrictions (HTTPS is otherwise required)
