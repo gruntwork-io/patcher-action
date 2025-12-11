@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fetch Pipelines Read Token
         id: pipelines-read-token
-        uses: ./pipelines-credentials
+        uses: gruntwork-io/pipelines-credentials@main
         with:
           PIPELINES_TOKEN_PATH: pipelines-read/${{ github.repository_owner }}
           FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
@@ -84,13 +84,13 @@ jobs:
           name: spec-file
       - name: Fetch Pipelines Read Token
         id: pipelines-read-token
-        uses: ./pipelines-credentials
+        uses: gruntwork-io/pipelines-credentials@main
         with:
           PIPELINES_TOKEN_PATH: pipelines-read/${{ github.repository_owner }}
           FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
       - name: Fetch Pipelines Execute Token
         id: pipelines-exec-token
-        uses: ./pipelines-credentials
+        uses: gruntwork-io/pipelines-credentials@main
         with:
           PIPELINES_TOKEN_PATH: propose-infra-change/${{ github.repository_owner }}
           FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
