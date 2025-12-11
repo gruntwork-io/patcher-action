@@ -55,7 +55,7 @@ jobs:
           PIPELINES_TOKEN_PATH: "pipelines-read/gruntwork-io"
           FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
 
-      - uses: gruntwork-io/patcher-action@patcher-debug
+      - uses: ./
         id: get-spec
         with:
           patcher_command: report
@@ -93,7 +93,7 @@ jobs:
         run: |
           echo '${{ needs.patcher-report.outputs.spec }}' > /tmp/patcher-spec.json
 
-      - uses: gruntwork-io/patcher-action@patcher-debug
+      - uses: ./
         with:
           patcher_command: update
           PIPELINES_READ_TOKEN: ${{ steps.pipelines-read-token.outputs.PIPELINES_TOKEN }}
