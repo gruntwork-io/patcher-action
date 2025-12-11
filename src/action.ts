@@ -660,11 +660,16 @@ async function validateAccessToPatcherCli(githubProvider: GitHubProviderInterfac
 }
 
 export async function run() {
-  const readToken = core.getInput("PIPELINES_READ_TOKEN");
-  const executeToken = core.getInput("PIPELINES_EXECUTE_TOKEN") || readToken;
+  // Prefer explicit inputs, then fall back to environment variables if present
+  const readTokenInput = core.getInput("PIPELINES_READ_TOKEN");
+  const executeTokenInput = core.getInput("PIPELINES_EXECUTE_TOKEN");
+  const readToken = readTokenInput || process.env.PIPELINES_READ_TOKEN || "";
+  const executeToken = executeTokenInput || process.env.PIPELINES_EXECUTE_TOKEN || readToken;
 
   if (!readToken) {
-    throw new Error("A 'PIPELINES_READ_TOKEN' input is required");
+    throw new Error(
+      "Missing token to access required repositories. Provide 'PIPELINES_READ_TOKEN' via the action 'with' inputs or set an environment variable 'PIPELINES_READ_TOKEN'."
+    );
   }
   const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
   const command = core.getInput("patcher_command");
@@ -686,8 +691,8 @@ export async function run() {
   if (githubOrg) extraEnv.GITHUB_ORG = githubOrg;
 
   // Always mask the token strings in the logs.
-  core.setSecret(readToken);
-  core.setSecret(executeToken);
+  if (readToken) core.setSecret(readToken);
+  if (executeToken) core.setSecret(executeToken);
 
   const githubConfig: GitHubConfig = {
     baseUrl: githubBaseUrl,
