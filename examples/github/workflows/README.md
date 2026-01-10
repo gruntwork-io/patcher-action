@@ -10,9 +10,9 @@ The promotional workflow uses 5 GitHub Actions workflows:
 ## The Updates Dependencies Workflows
 
 ### Config
-- The workflows require tokens to be defined using secrets named `PIPELINES_READ_TOKEN` and optionally `PIPELINES_EXECUTE_TOKEN`:
-  - `PIPELINES_READ_TOKEN`: Token used to download Patcher binaries from Gruntwork repositories and read dependency info from Gruntwork module repositories. This token needs read access to gruntwork-io repos.
-  - `PIPELINES_EXECUTE_TOKEN`: Token used for 'update' to interact with your repository: get repo info, push changes, and create PRs. This token needs write access to your infrastructure repo. If left unset, `PIPELINES_READ_TOKEN` will be used.
+- The workflows require tokens to be defined using secrets named `PATCHER_READ_TOKEN` and optionally `PATCHER_EXECUTE_TOKEN`:
+  - `PATCHER_READ_TOKEN`: Token used to download Patcher binaries from Gruntwork repositories and read dependency info from Gruntwork module repositories. This token needs read access to gruntwork-io repos.
+  - `PATCHER_EXECUTE_TOKEN`: Token used for 'update' to interact with your repository: get repo info, push changes, and create PRs. This token needs write access to your infrastructure repo. If left unset, `PATCHER_READ_TOKEN` will be used.
 
   - To allow the merging of a Pull Request to trigger other workflows, you need to use a repo-scoped GitHub Personal Access Token (PAT) created on an account that has write access to the repository that pull requests are being created in. This is the standard workaround [recommended by GitHub](https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow).
   - Patcher uses the PAT to access release information for Gruntwork modules, so it cannot be scoped to a specific repository and the token becomes a very sensitive secret.

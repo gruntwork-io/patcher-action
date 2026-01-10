@@ -35,7 +35,7 @@ jobs:
       - uses: gruntwork-io/patcher-action@v2
         id: run-report
         with:
-          PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+          PATCHER_READ_TOKEN: ${{ secrets.PATCHER_READ_TOKEN }}
           patcher_command: report
           working_dir: ./
           spec_file: spec.json
@@ -67,8 +67,8 @@ jobs:
       - uses: gruntwork-io/patcher-action@v2
         id: run-update
         with:
-          PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
-          PIPELINES_EXECUTE_TOKEN: ${{ secrets.PIPELINES_EXECUTE_TOKEN }}
+          PATCHER_READ_TOKEN: ${{ secrets.PATCHER_READ_TOKEN }}
+          PATCHER_EXECUTE_TOKEN: ${{ secrets.PATCHER_EXECUTE_TOKEN }}
           patcher_command: update
           working_dir: ./
           spec_file: spec.json

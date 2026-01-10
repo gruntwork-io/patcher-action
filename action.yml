@@ -7,11 +7,11 @@ branding:
   color: purple
 
 inputs:
-  PIPELINES_READ_TOKEN:
+  PATCHER_READ_TOKEN:
     description: "Token used to download Patcher binaries from Gruntwork repositories and read dependency info from Gruntwork module repositories. This token needs read access to gruntwork-io repos."
     required: false
-  PIPELINES_EXECUTE_TOKEN:
-    description: "Token used for 'update' to interact with your repository: get repo info, push changes, and create PRs. This token needs write access to your infrastructure repo. If left unset, PIPELINES_READ_TOKEN will be used."
+  PATCHER_EXECUTE_TOKEN:
+    description: "Token used for 'update' to interact with your repository: get repo info, push changes, and create PRs. This token needs write access to your infrastructure repo. If left unset, PATCHER_READ_TOKEN will be used."
     required: false
   github_base_url:
     description: "Base URL for GitHub (e.g., 'https://github.company.com' or 'http://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
@@ -69,7 +69,7 @@ inputs:
   commit_author:
     description: >
       "Author of the Pull Request's commits in the format 'Name <name@email.com>'. The permissions to push the changes
-      "and to create the Pull Request are from 'PIPELINES_EXECUTE_TOKEN'. Defaults to gruntwork-patcher-bot."
+      "and to create the Pull Request are from 'PATCHER_EXECUTE_TOKEN'. Defaults to gruntwork-patcher-bot."
     default: "gruntwork-patcher-bot <patcher@gruntwork.io>"
   pull_request_branch:
     description: "Branch where the Pull Request should be created. Required when 'update' is used."

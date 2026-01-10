@@ -13961,12 +13961,12 @@ async function validateAccessToPatcherCli(githubProvider) {
 }
 async function run() {
     // Prefer explicit inputs, then fall back to environment variables if present
-    const readTokenInput = core.getInput("PIPELINES_READ_TOKEN");
-    const executeTokenInput = core.getInput("PIPELINES_EXECUTE_TOKEN");
-    const readToken = readTokenInput || process.env.PIPELINES_READ_TOKEN || "";
-    const executeToken = executeTokenInput || process.env.PIPELINES_EXECUTE_TOKEN || readToken;
+    const readTokenInput = core.getInput("PATCHER_READ_TOKEN");
+    const executeTokenInput = core.getInput("PATCHER_EXECUTE_TOKEN");
+    const readToken = readTokenInput || process.env.PATCHER_READ_TOKEN || "";
+    const executeToken = executeTokenInput || process.env.PATCHER_EXECUTE_TOKEN || readToken;
     if (!readToken) {
-        throw new Error("Missing token to access required repositories. Provide 'PIPELINES_READ_TOKEN' via the action 'with' inputs or set an environment variable 'PIPELINES_READ_TOKEN'.");
+        throw new Error("Missing token to access required repositories. Provide 'PATCHER_READ_TOKEN' via the action 'with' inputs or set an environment variable 'PATCHER_READ_TOKEN'.");
     }
     const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
     const command = core.getInput("patcher_command");
