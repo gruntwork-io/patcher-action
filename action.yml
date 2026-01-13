@@ -7,14 +7,11 @@ branding:
   color: purple
 
 inputs:
-  github_token:
-    description: "Personal Access Token (PAT) used to download binaries and publish pull requests. For GitHub, use a Personal Access Token with appropriate repository permissions."
+  PATCHER_READ_TOKEN:
+    description: "Token used to download Patcher binaries from Gruntwork repositories and read dependency info from Gruntwork module repositories. This token needs read access to gruntwork-io repos."
     required: false
-  read_token:
-    description: "Personal Access Token (PAT) used for 'report' and 'update' to ingest dependencies and their updated versions. If left unset, github_token will be used."
-    required: false
-  update_token:
-    description: "Personal Access Token (PAT) used for 'update' to publish PRs against the relevant repo. If left unset, github_token will be used."
+  PATCHER_EXECUTE_TOKEN:
+    description: "Token used for 'update' to interact with your repository: get repo info, push changes, and create PRs. This token needs write access to your infrastructure repo. If left unset, PATCHER_READ_TOKEN will be used."
     required: false
   github_base_url:
     description: "Base URL for GitHub (e.g., 'https://github.company.com' or 'http://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com."
@@ -34,7 +31,7 @@ inputs:
   patcher_version:
     description: "Version of Patcher to use. Defaults to the v0.16.0 version."
     required: false
-    default: "v0.16.0"
+    default: "v0.17.0"
   terrapatch_git_repo:
     description: "Repository name for downloading terrapatch cli. Defaults to 'terrapatch-cli'."
     required: false
@@ -72,7 +69,7 @@ inputs:
   commit_author:
     description: >
       "Author of the Pull Request's commits in the format 'Name <name@email.com>'. The permissions to push the changes
-      "and to create the Pull Request are from 'github_token'. Defaults to gruntwork-patcher-bot."
+      "and to create the Pull Request are from 'PATCHER_EXECUTE_TOKEN'. Defaults to gruntwork-patcher-bot."
     default: "gruntwork-patcher-bot <patcher@gruntwork.io>"
   pull_request_branch:
     description: "Branch where the Pull Request should be created. Required when 'update' is used."
@@ -85,6 +82,9 @@ inputs:
     default: "false"
   no_color:
     description: "Disable color output. Defaults to false."
+    default: "false"
+  debug:
+    description: "Enable debug logging for patcher. Sets PATCHER_LOG_LEVEL=debug and PATCHER_DEBUG=1. Defaults to false."
     default: "false"
 
 outputs:

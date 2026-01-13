@@ -6,7 +6,6 @@ import * as toolCache from "@actions/tool-cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 import { Octokit } from "@octokit/rest";
-import { Api as GitHub } from "@octokit/plugin-rest-endpoint-methods/dist-types/types";
 
 // Define constants
 
@@ -80,9 +79,10 @@ type PatcherCliArgs = {
   dependency: string;
   workingDir: string;
   readToken: string;
-  updateToken: string;
+  executeToken: string;
   dryRun: boolean;
   noColor: boolean;
+  debug: boolean;
 };
 
 type GitCommitter = {
@@ -144,7 +144,7 @@ async function setupBinaryInEnv(binary: DownloadedBinary) {
 }
 
 class GitHubProvider implements GitHubProviderInterface {
-  private octokit: GitHub;
+  private octokit: Octokit;
 
   constructor(config: GitHubConfig) {
     // Use Octokit directly to bypass @actions/github HTTP protocol restrictions (HTTPS is otherwise required)
@@ -538,7 +538,8 @@ function updateArgs(
 function getPatcherEnvVars(
   gitCommiter: GitCommitter,
   readToken: string,
-  updateToken: string,
+  executeToken: string,
+  debug: boolean,
   extra?: { [key: string]: string }
 ): { [key: string]: string } {
   const telemetryId = `GHAction-${github.context.repo.owner}/${github.context.repo.repo}`;
@@ -546,16 +547,24 @@ function getPatcherEnvVars(
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const packageJson = require("../package.json");
 
-  return {
+  const envVars: { [key: string]: string } = {
     ...process.env,
     ...(extra || {}),
     GITHUB_OAUTH_TOKEN: readToken,
-    GITHUB_PUBLISH_TOKEN: updateToken,
+    GITHUB_PUBLISH_TOKEN: executeToken,
     PATCHER_TELEMETRY_ID: telemetryId,
     GIT_AUTHOR_NAME: gitCommiter.name,
     GIT_AUTHOR_EMAIL: gitCommiter.email,
     PATCHER_ACTIONS_VERSION: `v${packageJson.version}`,
   };
+
+  if (debug) {
+    envVars.PATCHER_LOG_LEVEL = "debug";
+    envVars.PATCHER_DEBUG = "1";
+    core.info("Debug logging enabled for patcher (PATCHER_LOG_LEVEL=debug, PATCHER_DEBUG=1)");
+  }
+
+  return envVars;
 }
 
 async function runPatcher(
@@ -571,9 +580,10 @@ async function runPatcher(
     dependency,
     workingDir,
     readToken,
-    updateToken,
+    executeToken,
     dryRun,
     noColor,
+    debug,
   }: PatcherCliArgs,
   extraEnv?: { [key: string]: string }
 ): Promise<void> {
@@ -584,7 +594,7 @@ async function runPatcher(
         "patcher",
         reportArgs(specFile, includeDirs, excludeDirs, workingDir, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+          env: getPatcherEnvVars(gitCommiter, readToken, executeToken, debug, extraEnv),
         }
       );
       core.endGroup();
@@ -612,7 +622,7 @@ async function runPatcher(
         "patcher",
         updateArgs(specFile, updateStrategy, prBranch, prTitle, dependency, workingDir, dryRun, noColor),
         {
-          env: getPatcherEnvVars(gitCommiter, readToken, updateToken, extraEnv),
+          env: getPatcherEnvVars(gitCommiter, readToken, executeToken, debug, extraEnv),
         }
       );
       core.endGroup();
@@ -649,16 +659,17 @@ async function validateAccessToPatcherCli(githubProvider: GitHubProviderInterfac
 }
 
 export async function run() {
-  const githubToken = core.getInput("github_token");
-  const patcherReadToken = core.getInput("read_token");
-  const patcherUpdateToken = core.getInput("update_token");
+  // Prefer explicit inputs, then fall back to environment variables if present
+  const readTokenInput = core.getInput("PATCHER_READ_TOKEN");
+  const executeTokenInput = core.getInput("PATCHER_EXECUTE_TOKEN");
+  const readToken = readTokenInput || process.env.PATCHER_READ_TOKEN || "";
+  const executeToken = executeTokenInput || process.env.PATCHER_EXECUTE_TOKEN || readToken;
 
-  if (!githubToken) {
-    throw new Error("A 'github_token' input is required");
+  if (!readToken) {
+    throw new Error(
+      "Missing token to access required repositories. Provide 'PATCHER_READ_TOKEN' via the action 'with' inputs or set an environment variable 'PATCHER_READ_TOKEN'."
+    );
   }
-
-  const readToken = patcherReadToken || githubToken;
-  const updateToken = patcherUpdateToken || githubToken;
   const githubBaseUrl = core.getInput("github_base_url") || "https://github.com";
   const command = core.getInput("patcher_command");
   const updateStrategy = core.getInput("update_strategy");
@@ -672,20 +683,20 @@ export async function run() {
   const prTitle = core.getInput("pull_request_title");
   const dryRun = core.getBooleanInput("dry_run");
   const noColor = core.getBooleanInput("no_color");
+  const debug = core.getBooleanInput("debug");
   const githubOrg = core.getInput("github_org") || "gruntwork-io";
   const extraEnv: { [key: string]: string } = {};
   if (githubBaseUrl) extraEnv.GITHUB_BASE_URL = githubBaseUrl;
   if (githubOrg) extraEnv.GITHUB_ORG = githubOrg;
 
   // Always mask the token strings in the logs.
-  core.setSecret(githubToken);
-  core.setSecret(readToken);
-  core.setSecret(updateToken);
+  if (readToken) core.setSecret(readToken);
+  if (executeToken) core.setSecret(executeToken);
 
   const githubConfig: GitHubConfig = {
     baseUrl: githubBaseUrl,
     apiVersion: "v3",
-    token: githubToken,
+    token: readToken,
   };
 
   const userGitHubProvider = createGitHubProvider(githubConfig);
@@ -695,7 +706,7 @@ export async function run() {
   const githubComConfig: GitHubConfig = {
     baseUrl: "https://github.com",
     apiVersion: "v3",
-    token: githubToken,
+    token: readToken,
   };
   const githubComProvider = createGitHubProvider(githubComConfig);
 
@@ -725,8 +736,9 @@ export async function run() {
     dependency,
     workingDir,
     readToken,
-    updateToken,
+    executeToken,
     dryRun,
     noColor,
+    debug,
   });
 }
