@@ -43,11 +43,11 @@ on:
         type: string
         default: "spec.json"
       dependency:
-        description: "Limit the update to a single dependency (--spec-target). Format: <org>/<repo>/<name>. If unset, each matrix item uses its own ID."
+        description: "Limit the update to a single dependency (--spec-target). Format: <org>/<repo>/<name>. If unset, all dependencies from the report are updated in one run."
         type: string
         default: ""
       pull_request_branch:
-        description: "Branch for Pull Requests. Defaults to 'patcher-updates-<dependency-ID>' when unset."
+        description: "Branch for Pull Requests. Defaults to 'patcher-updates' (or 'patcher-updates-<dependency-ID>' when dependency is set)."
         type: string
         default: ""
       pull_request_title:
@@ -75,7 +75,7 @@ on:
         type: boolean
         default: false
       skip_update:
-        description: "If true, only run the report job and skip the update job. Useful for auditing."
+        description: "If true, only run the report and skip the update step. Useful for auditing."
         type: boolean
         default: false
       api_base_url:
@@ -93,18 +93,17 @@ on:
     outputs:
       spec:
         description: "Upgrade specification JSON produced by patcher report."
-        value: ${{ jobs.patcher_report.outputs.spec }}
+        value: ${{ jobs.patcher.outputs.spec }}
 
 jobs:
-  patcher_report:
-    name: Patcher Report
+  patcher:
+    name: Patcher Report & Update
     runs-on: ${{ fromJson(inputs.runner) }}
     permissions:
       id-token: write
       contents: read
     outputs:
       spec: ${{ steps.run-report.outputs.spec }}
-      has_dependencies: ${{ steps.run-report.outputs.has_dependencies }}
     steps:
       - name: Checkout pipelines-credentials
         uses: actions/checkout@v4
@@ -127,6 +126,14 @@ jobs:
         with:
           PIPELINES_TOKEN_PATH: "pipelines-read/${{ github.repository_owner }}"
           FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+
+      - name: Fetch PR Create Token
+        id: pr-create-token
+        if: ${{ inputs.skip_update == false }}
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "propose-infra-change/${{ github.repository_owner }}"
+          FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
 
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -208,94 +215,8 @@ jobs:
             echo "has_dependencies=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Upload spec artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: patcher-spec
-          path: repo/${{ inputs.spec_file }}
-
-  patcher_update:
-    name: "Patcher Update - ${{ matrix.dependency.ID }}"
-    needs: patcher_report
-    if: ${{ inputs.skip_update == false && needs.patcher_report.outputs.has_dependencies == 'true' }}
-    runs-on: ${{ fromJson(inputs.runner) }}
-    permissions:
-      id-token: write
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        dependency: ${{ fromJson(needs.patcher_report.outputs.spec).Dependencies }}
-    steps:
-      - name: Checkout pipelines-credentials
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.pipelines_credentials_repo }}
-          ref: ${{ inputs.pipelines_credentials_ref }}
-          token: ${{ secrets.PIPELINES_READ_TOKEN }}
-          path: .pipelines-credentials
-
-      - name: Fetch Gruntwork Read Token
-        id: gruntwork-read-token
-        uses: ./.pipelines-credentials
-        with:
-          PIPELINES_TOKEN_PATH: "pipelines-read/gruntwork-io"
-          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
-
-      - name: Fetch Org Read Token
-        id: org-read-token
-        uses: ./.pipelines-credentials
-        with:
-          PIPELINES_TOKEN_PATH: "pipelines-read/${{ github.repository_owner }}"
-          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
-
-      - name: Fetch PR Create Token
-        id: pr-create-token
-        uses: ./.pipelines-credentials
-        with:
-          PIPELINES_TOKEN_PATH: "propose-infra-change/${{ github.repository_owner }}"
-          FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
-
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
-          path: repo
-
-      - name: Download spec artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: patcher-spec
-          path: repo
-
-      - name: Install Patcher and Terrapatch
-        env:
-          GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
-          PATCHER_VERSION: ${{ inputs.patcher_version }}
-          TERRAPATCH_VERSION: ${{ inputs.terrapatch_version }}
-        run: |
-          PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
-          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-
-          mkdir -p /tmp/patcher-install
-          GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$PATCHER_VERSION" \
-            --repo gruntwork-io/patcher-cli \
-            --pattern "patcher_${PLATFORM}_${ARCH}*" \
-            --dir /tmp/patcher-install
-          mv /tmp/patcher-install/patcher_* /tmp/patcher-install/patcher
-          chmod +x /tmp/patcher-install/patcher
-          echo "/tmp/patcher-install" >> "$GITHUB_PATH"
-
-          mkdir -p /tmp/terrapatch-install
-          GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$TERRAPATCH_VERSION" \
-            --repo gruntwork-io/terrapatch-cli \
-            --pattern "terrapatch_${PLATFORM}_${ARCH}*" \
-            --dir /tmp/terrapatch-install
-          mv /tmp/terrapatch-install/terrapatch_* /tmp/terrapatch-install/terrapatch
-          chmod +x /tmp/terrapatch-install/terrapatch
-          echo "/tmp/terrapatch-install" >> "$GITHUB_PATH"
-
       - name: Run patcher update
+        if: ${{ inputs.skip_update == false && steps.run-report.outputs.has_dependencies == 'true' }}
         working-directory: repo
         env:
           GITHUB_OAUTH_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
@@ -306,23 +227,25 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          SPEC_TARGET="${{ inputs.dependency }}"
-          if [[ -z "$SPEC_TARGET" ]]; then
-            SPEC_TARGET="${{ matrix.dependency.ID }}"
-          fi
-
           PR_BRANCH="${{ inputs.pull_request_branch }}"
           if [[ -z "$PR_BRANCH" ]]; then
-            PR_BRANCH="patcher-updates-${SPEC_TARGET}"
+            if [[ -n "${{ inputs.dependency }}" ]]; then
+              PR_BRANCH="patcher-updates-${{ inputs.dependency }}"
+            else
+              PR_BRANCH="patcher-updates"
+            fi
           fi
 
           UPDATE_ARGS=(update --non-interactive --skip-container-runtime \
             "--update-strategy=${{ inputs.update_strategy }}" \
             "--spec-file=${{ inputs.spec_file }}" \
-            "--spec-target=${SPEC_TARGET}" \
             --publish \
             "--pr-branch=${PR_BRANCH}" \
             "--pr-title=${{ inputs.pull_request_title }}")
+
+          if [[ -n "${{ inputs.dependency }}" ]]; then
+            UPDATE_ARGS+=("--spec-target=${{ inputs.dependency }}")
+          fi
 
           if [[ "${{ inputs.dry_run }}" == "true" ]]; then
             UPDATE_ARGS+=(--dry-run)
