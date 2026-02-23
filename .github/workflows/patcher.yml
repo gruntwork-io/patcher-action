@@ -151,7 +151,7 @@ jobs:
 
           mkdir -p /tmp/terrapatch-install
           GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$TERRAPATCH_VERSION" \
-            --repo gruntwork-io/terrapatch \
+            --repo gruntwork-io/terrapatch-cli \
             --pattern "terrapatch_${PLATFORM}_${ARCH}*" \
             --dir /tmp/terrapatch-install
           mv /tmp/terrapatch-install/terrapatch_* /tmp/terrapatch-install/terrapatch
@@ -281,7 +281,7 @@ jobs:
 
           mkdir -p /tmp/terrapatch-install
           GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$TERRAPATCH_VERSION" \
-            --repo gruntwork-io/terrapatch \
+            --repo gruntwork-io/terrapatch-cli \
             --pattern "terrapatch_${PLATFORM}_${ARCH}*" \
             --dir /tmp/terrapatch-install
           mv /tmp/terrapatch-install/terrapatch_* /tmp/terrapatch-install/terrapatch
