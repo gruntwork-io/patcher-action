@@ -10,9 +10,15 @@ The promotional workflow uses 5 GitHub Actions workflows:
 ## The Updates Dependencies Workflows
 
 ### Config
-- The workflows require tokens to be defined using secrets named `PATCHER_READ_TOKEN` and optionally `PATCHER_EXECUTE_TOKEN`:
-  - `PATCHER_READ_TOKEN`: Token used to download Patcher binaries from Gruntwork repositories and read dependency info from Gruntwork module repositories. This token needs read access to gruntwork-io repos.
-  - `PATCHER_EXECUTE_TOKEN`: Token used for 'update' to interact with your repository: get repo info, push changes, and create PRs. This token needs write access to your infrastructure repo. If left unset, `PATCHER_READ_TOKEN` will be used.
+- The workflows require tokens to be defined using secrets named `PIPELINES_READ_TOKEN` and `PR_CREATE_TOKEN` (passed into the reusable workflow):
+  - `PIPELINES_READ_TOKEN`: Token used to download Patcher binaries from Gruntwork repositories and read dependency info from Gruntwork module repositories. Needs read access to gruntwork-io repos and your infrastructure repos. Also used as fallback when OIDC is not available.
+  - `PR_CREATE_TOKEN`: Token used for 'update' to push changes and create Pull Requests. Needs write access to your infrastructure repository.
+
+- **Authentication:** The patcher workflow uses the same `pipelines-credentials` action as Gruntwork drift detection. It first tries to obtain a token via **OIDC** (GitHub’s OpenID Connect with the Gruntwork Pipelines GitHub App). If that fails (e.g. OIDC not configured or `id-token: write` not set), it falls back to the **FALLBACK_TOKEN** (the secrets above). You must either:
+  - Grant **`id-token: write`** on the job that calls the patcher (so OIDC can be used), and/or
+  - Pass **`PIPELINES_READ_TOKEN`** and **`PR_CREATE_TOKEN`** so the fallback works. If neither OIDC nor the fallback tokens are available, you will see: `Unable to get ACTIONS_ID_TOKEN_REQUEST_URL env variable` and `no FALLBACK_TOKEN provided`.
+
+- The example workflows set `permissions: id-token: write` and `contents: read` at the workflow level so that OIDC works when available. When calling a reusable workflow from another org, the caller must explicitly set `id-token: write` for the called workflow to receive OIDC.
 
   - To allow the merging of a Pull Request to trigger other workflows, you need to use a repo-scoped GitHub Personal Access Token (PAT) created on an account that has write access to the repository that pull requests are being created in. This is the standard workaround [recommended by GitHub](https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow).
   - Patcher uses the PAT to access release information for Gruntwork modules, so it cannot be scoped to a specific repository and the token becomes a very sensitive secret.

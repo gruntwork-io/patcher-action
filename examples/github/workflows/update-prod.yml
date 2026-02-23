@@ -5,6 +5,10 @@ on:
   repository_dispatch:
     types: [stage_updates_merged]
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   patcher:
     if: github.event_name == 'repository_dispatch' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

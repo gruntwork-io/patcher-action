@@ -99,6 +99,9 @@ jobs:
   patcher_report:
     name: Patcher Report
     runs-on: ${{ fromJson(inputs.runner) }}
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       spec: ${{ steps.run-report.outputs.spec }}
       has_dependencies: ${{ steps.run-report.outputs.has_dependencies }}
@@ -216,6 +219,9 @@ jobs:
     needs: patcher_report
     if: ${{ inputs.skip_update == false && needs.patcher_report.outputs.has_dependencies == 'true' }}
     runs-on: ${{ fromJson(inputs.runner) }}
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:

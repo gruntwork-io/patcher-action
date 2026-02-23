@@ -12,6 +12,10 @@ on:
     branches:
       - main
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   trigger-next-env:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'updates-dev')
