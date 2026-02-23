@@ -191,10 +191,13 @@ jobs:
 
           patcher "${REPORT_ARGS[@]}"
 
+          # Use a unique delimiter to avoid "Matching delimiter not found" when the
+          # spec JSON contains a line that equals the delimiter (e.g. in constraints).
+          SPEC_DELIM="patcher_spec_$(openssl rand -hex 8)"
           {
-            echo 'spec<<PATCHER_SPEC_EOF'
+            echo "spec<<${SPEC_DELIM}"
             cat "${{ inputs.spec_file }}"
-            echo 'PATCHER_SPEC_EOF'
+            echo "${SPEC_DELIM}"
           } >> "$GITHUB_OUTPUT"
 
           DEPS_COUNT=$(jq 'if .Dependencies then .Dependencies | length else 0 end' "${{ inputs.spec_file }}")
