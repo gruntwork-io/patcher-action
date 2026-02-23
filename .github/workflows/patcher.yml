@@ -21,7 +21,7 @@ on:
       terrapatch_version:
         description: "Version of terrapatch to download and use."
         type: string
-        default: "v0.1.6"
+        default: "v0.2.2"
       working_dir:
         description: "Directory within the repository where Patcher should run. Relative to the repository root."
         type: string
