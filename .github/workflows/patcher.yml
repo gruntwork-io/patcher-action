@@ -268,16 +268,14 @@ jobs:
 
           GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$PATCHER_VERSION" \
             --repo gruntwork-io/patcher-cli \
-            --pattern "patcher_${PLATFORM}_${ARCH}.tar.gz" \
+            --pattern "patcher_${PLATFORM}_${ARCH}" \
             --dir /tmp/patcher-install
-          tar -xzf "/tmp/patcher-install/patcher_${PLATFORM}_${ARCH}.tar.gz" -C /tmp/patcher-install
           echo "/tmp/patcher-install" >> "$GITHUB_PATH"
 
           GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$TERRAPATCH_VERSION" \
-            --repo gruntwork-io/terrapatch-cli \
-            --pattern "terrapatch_${PLATFORM}_${ARCH}.tar.gz" \
+            --repo gruntwork-io/terrapatch \
+            --pattern "terrapatch_${PLATFORM}_${ARCH}" \
             --dir /tmp/terrapatch-install
-          tar -xzf "/tmp/terrapatch-install/terrapatch_${PLATFORM}_${ARCH}.tar.gz" -C /tmp/terrapatch-install
           echo "/tmp/terrapatch-install" >> "$GITHUB_PATH"
 
       - name: Run patcher update
