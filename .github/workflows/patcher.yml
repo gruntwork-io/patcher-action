@@ -179,12 +179,19 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          WORKING_DIR_ABS="$GITHUB_WORKSPACE"
+          # Ensure we run from repo root for consistent path resolution
+          REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
+          if [[ -z "$GITHUB_WORKSPACE" ]]; then
+            echo "::warning::GITHUB_WORKSPACE was empty, using REPO_ROOT=$(pwd)"
+          fi
+          cd "$REPO_ROOT"
+
+          WORKING_DIR_ABS="$REPO_ROOT"
           WD="${{ inputs.working_dir }}"
           if [[ -n "$WD" && "$WD" != "." && "$WD" != "./" ]]; then
-            WORKING_DIR_ABS="${GITHUB_WORKSPACE}/${WD%/}"
+            WORKING_DIR_ABS="${REPO_ROOT}/${WD%/}"
           fi
-          SPEC_FILE_ABS="${GITHUB_WORKSPACE}/${{ inputs.spec_file }}"
+          SPEC_FILE_ABS="${REPO_ROOT}/${{ inputs.spec_file }}"
 
           REPORT_ARGS=(report --skip-container-runtime "--output-spec=${SPEC_FILE_ABS}")
 
@@ -308,6 +315,8 @@ jobs:
         run: |
           echo "=== GITHUB_WORKSPACE ==="
           echo "$GITHUB_WORKSPACE"
+          echo "=== CWD ==="
+          pwd
           echo "=== Spec file at root? ==="
           ls -la "${{ inputs.spec_file }}" || true
           echo "=== Top-level (maxdepth 1) ==="
@@ -321,6 +330,15 @@ jobs:
           done
           echo "=== First dependency structure (keys) ==="
           jq '.Dependencies[0] | keys' "${{ inputs.spec_file }}" 2>/dev/null || echo "(jq or spec structure not as expected)"
+          echo "=== Verify a sandbox path exists (patcher will resolve paths under CWD) ==="
+          for d in dev663test-sandbox mydemosandbox-sandbox; do
+            if [[ -d "$d" ]]; then
+              echo "  dir EXISTS: $d"
+              find "$d" -name "terragrunt.hcl" 2>/dev/null | head -2 | while read -r f; do echo "    $(test -f "$f" && echo EXISTS || echo MISSING): $f"; done
+            else
+              echo "  dir MISSING: $d"
+            fi
+          done
 
       - name: Install Patcher and Terrapatch
         env:
@@ -359,12 +377,26 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          WORKING_DIR_ABS="$GITHUB_WORKSPACE"
+          # Ensure we run from repo root so paths in the spec resolve correctly
+          REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
+          if [[ -z "$GITHUB_WORKSPACE" ]]; then
+            echo "::warning::GITHUB_WORKSPACE was empty, using REPO_ROOT=$(pwd)"
+          fi
+          cd "$REPO_ROOT"
+
+          WORKING_DIR_ABS="$REPO_ROOT"
           WD="${{ inputs.working_dir }}"
           if [[ -n "$WD" && "$WD" != "." && "$WD" != "./" ]]; then
-            WORKING_DIR_ABS="${GITHUB_WORKSPACE}/${WD%/}"
+            WORKING_DIR_ABS="${REPO_ROOT}/${WD%/}"
           fi
-          SPEC_FILE_ABS="${GITHUB_WORKSPACE}/${{ inputs.spec_file }}"
+          SPEC_FILE_ABS="${REPO_ROOT}/${{ inputs.spec_file }}"
+
+          echo "=== Patcher update path debug ==="
+          echo "REPO_ROOT=$REPO_ROOT"
+          echo "SPEC_FILE_ABS=$SPEC_FILE_ABS"
+          echo "WORKING_DIR_ABS=$WORKING_DIR_ABS"
+          echo "spec exists: $(test -f "$SPEC_FILE_ABS" && echo yes || echo no)"
+          echo "working dir exists: $(test -d "$WORKING_DIR_ABS" && echo yes || echo no)"
 
           PR_BRANCH="${{ inputs.pull_request_branch }}"
           if [[ -z "$PR_BRANCH" ]]; then
