@@ -17,7 +17,7 @@ on:
       patcher_version:
         description: "Version of Patcher to download and use."
         type: string
-        default: "v0.17.1"
+        default: "v0.17.3"
       terrapatch_version:
         description: "Version of terrapatch to download and use."
         type: string
