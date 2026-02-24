@@ -10,7 +10,6 @@ name: Patcher
 on:
   workflow_dispatch:
     inputs:
-      runner:
       include_dirs:
         description: 'Include only dirs matching this double-star glob (report only). E.g. "{*dev*}/**"'
         required: false
