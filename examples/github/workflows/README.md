@@ -31,6 +31,8 @@ The promotional workflow uses 6 GitHub Actions workflows:
 
 - The *Patcher* example workflow (`patcher.yml`) is triggered only by **Run workflow**. It runs the reusable patcher workflow and forwards every input (runner, versions, working_dir, include_dirs, exclude_dirs, update_strategy, spec_file, dependency, PR options, dry_run, no_color, debug, skip_update, API/credentials repo refs). Use it to test combinations (e.g. dry_run + include_dirs, or skip_update only) without editing YAML.
 
+- **Paths:** `working_dir` and `spec_file` are relative to the repository root (the checked-out repo lives at `path: repo`). The workflow converts these to absolute paths when calling Patcher so that path resolution is consistent between report and update.
+
 - Environment or account folder names can be set in the workflow file by using the `include_dirs` and `exclude_dirs` action inputs.
 
 For example:
