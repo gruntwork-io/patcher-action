@@ -312,7 +312,6 @@ jobs:
           fi
 
       # Parsing errors in logs (e.g. retryable_errors in HCL) are expected when repo HCL is invalid.
-      # Path errors (FILE DOES NOT EXIST) are addressed by passing include_dirs/exclude_dirs to update.
       - name: Debug workspace before update (spec + repo paths)
         run: |
           echo "=== GITHUB_WORKSPACE ==="
@@ -369,8 +368,6 @@ jobs:
           chmod +x /tmp/terrapatch-install/terrapatch
           echo "/tmp/terrapatch-install" >> "$GITHUB_PATH"
 
-      # Report and update run in separate jobs; spec is passed via artifact. We pass the same
-      # include_dirs/exclude_dirs to update as used for report so path resolution stays consistent.
       - name: Run patcher update
         env:
           GITHUB_OAUTH_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
@@ -428,14 +425,6 @@ jobs:
 
           if [[ "${{ inputs.no_color }}" == "true" ]]; then
             UPDATE_ARGS+=(--no-color)
-          fi
-
-          # Match report scope so path resolution is consistent (report and update use same include/exclude)
-          if [[ -n "${{ inputs.include_dirs }}" ]]; then
-            UPDATE_ARGS+=("--include-dirs=${{ inputs.include_dirs }}")
-          fi
-          if [[ -n "${{ inputs.exclude_dirs }}" ]]; then
-            UPDATE_ARGS+=("--exclude-dirs=${{ inputs.exclude_dirs }}")
           fi
 
           UPDATE_ARGS+=("${WORKING_DIR_ABS}")
