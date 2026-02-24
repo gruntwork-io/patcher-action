@@ -312,12 +312,15 @@ jobs:
           ls -la "${{ inputs.spec_file }}" || true
           echo "=== Top-level (maxdepth 1) ==="
           find . -maxdepth 1 -print | sort
-          echo "=== Sample paths from spec (first 5 Usages paths if present) ==="
-          jq -r '.Dependencies[]?.Usages[]?.UsagePath // empty' "${{ inputs.spec_file }}" 2>/dev/null | head -5 | while read -r p; do
+          echo "=== Sample paths from spec (first 5 file paths if present) ==="
+          ( jq -r '.Dependencies[]?.Usages[]? | (.FilePath // .UsagePath // .Path // .File) // empty' "${{ inputs.spec_file }}" 2>/dev/null || \
+            jq -r '.. | objects | .FilePath? // .UsagePath? // .Path? // .File? // empty' "${{ inputs.spec_file }}" 2>/dev/null ) | head -5 | while read -r p; do
             if [[ -n "$p" ]]; then
               if [[ -f "$p" ]]; then echo "  EXISTS: $p"; else echo "  MISSING: $p"; fi
             fi
-          done || true
+          done
+          echo "=== First dependency structure (keys) ==="
+          jq '.Dependencies[0] | keys' "${{ inputs.spec_file }}" 2>/dev/null || echo "(jq or spec structure not as expected)"
 
       - name: Install Patcher and Terrapatch
         env:
@@ -356,6 +359,13 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
+          WORKING_DIR_ABS="$GITHUB_WORKSPACE"
+          WD="${{ inputs.working_dir }}"
+          if [[ -n "$WD" && "$WD" != "." && "$WD" != "./" ]]; then
+            WORKING_DIR_ABS="${GITHUB_WORKSPACE}/${WD%/}"
+          fi
+          SPEC_FILE_ABS="${GITHUB_WORKSPACE}/${{ inputs.spec_file }}"
+
           PR_BRANCH="${{ inputs.pull_request_branch }}"
           if [[ -z "$PR_BRANCH" ]]; then
             if [[ -n "${{ inputs.dependency }}" ]]; then
@@ -367,7 +377,7 @@ jobs:
 
           UPDATE_ARGS=(update --non-interactive --skip-container-runtime \
             "--update-strategy=${{ inputs.update_strategy }}" \
-            "--spec-file=${{ inputs.spec_file }}" \
+            "--spec-file=${SPEC_FILE_ABS}" \
             --publish \
             "--pr-branch=${PR_BRANCH}" \
             "--pr-title=${{ inputs.pull_request_title }}")
@@ -384,6 +394,6 @@ jobs:
             UPDATE_ARGS+=(--no-color)
           fi
 
-          UPDATE_ARGS+=("${{ inputs.working_dir }}")
+          UPDATE_ARGS+=("${WORKING_DIR_ABS}")
 
           patcher "${UPDATE_ARGS[@]}"
