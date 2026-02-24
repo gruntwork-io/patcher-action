@@ -177,7 +177,15 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          REPORT_ARGS=(report --skip-container-runtime "--output-spec=${{ inputs.spec_file }}")
+          # Resolve working_dir and spec_file to absolute paths so report and update use the same paths
+          WORKING_DIR_ABS="$GITHUB_WORKSPACE"
+          WD="${{ inputs.working_dir }}"
+          if [[ -n "$WD" && "$WD" != "." && "$WD" != "./" ]]; then
+            WORKING_DIR_ABS="${GITHUB_WORKSPACE}/${WD%/}"
+          fi
+          SPEC_FILE_ABS="${GITHUB_WORKSPACE}/${{ inputs.spec_file }}"
+
+          REPORT_ARGS=(report --skip-container-runtime "--output-spec=${SPEC_FILE_ABS}")
 
           if [[ -n "${{ inputs.include_dirs }}" ]]; then
             REPORT_ARGS+=("--include-dirs=${{ inputs.include_dirs }}")
@@ -195,18 +203,18 @@ jobs:
             REPORT_ARGS+=(--dry-run)
           fi
 
-          REPORT_ARGS+=("${{ inputs.working_dir }}")
+          REPORT_ARGS+=("${WORKING_DIR_ABS}")
 
           patcher "${REPORT_ARGS[@]}"
 
           {
             echo 'spec<<PATCHER_SPEC_EOF'
-            cat "${{ inputs.spec_file }}"
+            cat "${SPEC_FILE_ABS}"
             echo ""
             echo 'PATCHER_SPEC_EOF'
           } >> "$GITHUB_OUTPUT"
 
-          DEPS_COUNT=$(jq 'if .Dependencies then .Dependencies | length else 0 end' "${{ inputs.spec_file }}")
+          DEPS_COUNT=$(jq 'if .Dependencies then .Dependencies | length else 0 end' "${SPEC_FILE_ABS}")
           if [[ "$DEPS_COUNT" -gt 0 ]]; then
             echo "has_dependencies=true" >> "$GITHUB_OUTPUT"
           else
@@ -224,6 +232,14 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
+          # Resolve working_dir and spec_file to the same absolute paths used in report
+          WORKING_DIR_ABS="$GITHUB_WORKSPACE"
+          WD="${{ inputs.working_dir }}"
+          if [[ -n "$WD" && "$WD" != "." && "$WD" != "./" ]]; then
+            WORKING_DIR_ABS="${GITHUB_WORKSPACE}/${WD%/}"
+          fi
+          SPEC_FILE_ABS="${GITHUB_WORKSPACE}/${{ inputs.spec_file }}"
+
           PR_BRANCH="${{ inputs.pull_request_branch }}"
           if [[ -z "$PR_BRANCH" ]]; then
             if [[ -n "${{ inputs.dependency }}" ]]; then
@@ -235,7 +251,7 @@ jobs:
 
           UPDATE_ARGS=(update --non-interactive --skip-container-runtime \
             "--update-strategy=${{ inputs.update_strategy }}" \
-            "--spec-file=${{ inputs.spec_file }}" \
+            "--spec-file=${SPEC_FILE_ABS}" \
             --publish \
             "--pr-branch=${PR_BRANCH}" \
             "--pr-title=${{ inputs.pull_request_title }}")
@@ -252,6 +268,6 @@ jobs:
             UPDATE_ARGS+=(--no-color)
           fi
 
-          UPDATE_ARGS+=("${{ inputs.working_dir }}")
+          UPDATE_ARGS+=("${WORKING_DIR_ABS}")
 
           patcher "${UPDATE_ARGS[@]}"
