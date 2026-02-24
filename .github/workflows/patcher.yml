@@ -139,7 +139,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
-          path: repo
 
       - name: Install Patcher and Terrapatch
         env:
@@ -168,11 +167,8 @@ jobs:
           chmod +x /tmp/terrapatch-install/terrapatch
           echo "/tmp/terrapatch-install" >> "$GITHUB_PATH"
 
-      # working_dir and spec_file are relative to the repository root (checkout at path: repo).
-      # We convert them to absolute paths when calling Patcher so path resolution is consistent between report and update.
       - name: Run patcher report
         id: run-report
-        working-directory: repo
         env:
           GITHUB_OAUTH_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
           GIT_AUTHOR_NAME: ${{ inputs.commit_author_name }}
@@ -181,35 +177,7 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          REPO_ROOT="$GITHUB_WORKSPACE/repo"
-          WORKING_DIR_ARG="${{ inputs.working_dir }}"
-          if [[ "$WORKING_DIR_ARG" == /* ]]; then
-            WORKING_DIR_ABS="$WORKING_DIR_ARG"
-          else
-            WORKING_DIR_ARG="${WORKING_DIR_ARG#./}"
-            WORKING_DIR_ARG="${WORKING_DIR_ARG%/}"
-            while [[ "$WORKING_DIR_ARG" == *//* ]]; do WORKING_DIR_ARG="${WORKING_DIR_ARG//\/\//\/}"; done
-            if [[ -z "$WORKING_DIR_ARG" || "$WORKING_DIR_ARG" == "." ]]; then
-              WORKING_DIR_ABS="$REPO_ROOT"
-            else
-              WORKING_DIR_ABS="$REPO_ROOT/$WORKING_DIR_ARG"
-            fi
-          fi
-          SPEC_ARG="${{ inputs.spec_file }}"
-          if [[ "$SPEC_ARG" == /* ]]; then
-            SPEC_FILE_ABS="$SPEC_ARG"
-            SPEC_REL="$SPEC_ARG"
-          else
-            SPEC_ARG="${SPEC_ARG#./}"
-            while [[ "$SPEC_ARG" == *//* ]]; do SPEC_ARG="${SPEC_ARG//\/\//\/}"; done
-            SPEC_FILE_ABS="$REPO_ROOT/$SPEC_ARG"
-            SPEC_REL="$SPEC_ARG"
-          fi
-
-          # Run from repo root with relative paths so patcher CLI path resolution is consistent (see docs/plan-fix-path-error.md).
-          cd "$WORKING_DIR_ABS"
-
-          REPORT_ARGS=(report --skip-container-runtime "--output-spec=$SPEC_REL")
+          REPORT_ARGS=(report --skip-container-runtime "--output-spec=${{ inputs.spec_file }}")
 
           if [[ -n "${{ inputs.include_dirs }}" ]]; then
             REPORT_ARGS+=("--include-dirs=${{ inputs.include_dirs }}")
@@ -227,18 +195,18 @@ jobs:
             REPORT_ARGS+=(--dry-run)
           fi
 
-          REPORT_ARGS+=(".")
+          REPORT_ARGS+=("${{ inputs.working_dir }}")
 
           patcher "${REPORT_ARGS[@]}"
 
           {
             echo 'spec<<PATCHER_SPEC_EOF'
-            cat "$SPEC_REL"
+            cat "${{ inputs.spec_file }}"
             echo ""
             echo 'PATCHER_SPEC_EOF'
           } >> "$GITHUB_OUTPUT"
 
-          DEPS_COUNT=$(jq 'if .Dependencies then .Dependencies | length else 0 end' "$SPEC_REL")
+          DEPS_COUNT=$(jq 'if .Dependencies then .Dependencies | length else 0 end' "${{ inputs.spec_file }}")
           if [[ "$DEPS_COUNT" -gt 0 ]]; then
             echo "has_dependencies=true" >> "$GITHUB_OUTPUT"
           else
@@ -247,7 +215,6 @@ jobs:
 
       - name: Run patcher update
         if: ${{ inputs.skip_update == false && steps.run-report.outputs.has_dependencies == 'true' }}
-        working-directory: repo
         env:
           GITHUB_OAUTH_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
           GITHUB_PUBLISH_TOKEN: ${{ steps.pr-create-token.outputs.PIPELINES_TOKEN }}
@@ -257,34 +224,6 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          REPO_ROOT="$GITHUB_WORKSPACE/repo"
-          WORKING_DIR_ARG="${{ inputs.working_dir }}"
-          if [[ "$WORKING_DIR_ARG" == /* ]]; then
-            WORKING_DIR_ABS="$WORKING_DIR_ARG"
-          else
-            WORKING_DIR_ARG="${WORKING_DIR_ARG#./}"
-            WORKING_DIR_ARG="${WORKING_DIR_ARG%/}"
-            while [[ "$WORKING_DIR_ARG" == *//* ]]; do WORKING_DIR_ARG="${WORKING_DIR_ARG//\/\//\/}"; done
-            if [[ -z "$WORKING_DIR_ARG" || "$WORKING_DIR_ARG" == "." ]]; then
-              WORKING_DIR_ABS="$REPO_ROOT"
-            else
-              WORKING_DIR_ABS="$REPO_ROOT/$WORKING_DIR_ARG"
-            fi
-          fi
-          SPEC_ARG="${{ inputs.spec_file }}"
-          if [[ "$SPEC_ARG" == /* ]]; then
-            SPEC_FILE_ABS="$SPEC_ARG"
-            SPEC_REL="$SPEC_ARG"
-          else
-            SPEC_ARG="${SPEC_ARG#./}"
-            while [[ "$SPEC_ARG" == *//* ]]; do SPEC_ARG="${SPEC_ARG//\/\//\/}"; done
-            SPEC_FILE_ABS="$REPO_ROOT/$SPEC_ARG"
-            SPEC_REL="$SPEC_ARG"
-          fi
-
-          # Run from repo root with relative paths so patcher CLI path resolution is consistent (see docs/plan-fix-path-error.md).
-          cd "$WORKING_DIR_ABS"
-
           PR_BRANCH="${{ inputs.pull_request_branch }}"
           if [[ -z "$PR_BRANCH" ]]; then
             if [[ -n "${{ inputs.dependency }}" ]]; then
@@ -296,7 +235,7 @@ jobs:
 
           UPDATE_ARGS=(update --non-interactive --skip-container-runtime \
             "--update-strategy=${{ inputs.update_strategy }}" \
-            "--spec-file=$SPEC_REL" \
+            "--spec-file=${{ inputs.spec_file }}" \
             --publish \
             "--pr-branch=${PR_BRANCH}" \
             "--pr-title=${{ inputs.pull_request_title }}")
@@ -313,6 +252,6 @@ jobs:
             UPDATE_ARGS+=(--no-color)
           fi
 
-          UPDATE_ARGS+=(".")
+          UPDATE_ARGS+=("${{ inputs.working_dir }}")
 
           patcher "${UPDATE_ARGS[@]}"
