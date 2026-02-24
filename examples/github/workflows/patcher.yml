@@ -1,26 +1,144 @@
+# Example workflow that runs Patcher with all inputs exposed for testing permutations.
+#
+# Use "Run workflow" in the Actions UI to exercise different combinations of:
+# dry_run, include_dirs, exclude_dirs, skip_update, dependency, update_strategy, etc.
+#
+# Requires secrets: PIPELINES_READ_TOKEN, PR_CREATE_TOKEN
+
 name: Patcher
 
 on:
-  pull_request:
-    types: [synchronize, opened, reopened]
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner label(s), as escaped JSON. E.g. "\"ubuntu-latest\"" or "[\"self-hosted\",\"linux\"]"'
+        required: false
+        default: '"ubuntu-latest"'
+        type: string
+      patcher_version:
+        description: 'Version of Patcher to use'
+        required: false
+        default: 'v0.17.1'
+        type: string
+      terrapatch_version:
+        description: 'Version of terrapatch to use'
+        required: false
+        default: 'v0.2.2'
+        type: string
+      working_dir:
+        description: 'Directory where Patcher runs (relative to repo root)'
+        required: false
+        default: './'
+        type: string
+      include_dirs:
+        description: 'Include only dirs matching this double-star glob (report only). E.g. "{*dev*}/**"'
+        required: false
+        default: ''
+        type: string
+      exclude_dirs:
+        description: 'Exclude dirs matching this double-star glob (report only). E.g. "{*alb*}/**"'
+        required: false
+        default: ''
+        type: string
+      update_strategy:
+        description: 'Update strategy for patcher update'
+        required: false
+        default: 'next-breaking'
+        type: string
+      spec_file:
+        description: 'Upgrade spec filename (relative to repo root)'
+        required: false
+        default: 'spec.json'
+        type: string
+      dependency:
+        description: 'Limit to one dependency (--spec-target). Format: <org>/<repo>/<name>'
+        required: false
+        default: ''
+        type: string
+      pull_request_branch:
+        description: 'Branch for PRs (default: patcher-updates or patcher-updates-<dependency>)'
+        required: false
+        default: ''
+        type: string
+      pull_request_title:
+        description: 'Title of the Pull Request'
+        required: false
+        default: '[Patcher] Update dependencies'
+        type: string
+      commit_author_name:
+        description: 'Commit author name'
+        required: false
+        default: 'gruntwork-patcher-bot'
+        type: string
+      commit_author_email:
+        description: 'Commit author email'
+        required: false
+        default: 'patcher@gruntwork.io'
+        type: string
+      dry_run:
+        description: 'Simulate operations without making changes'
+        required: false
+        default: false
+        type: boolean
+      no_color:
+        description: 'Disable color output'
+        required: false
+        default: false
+        type: boolean
+      debug:
+        description: 'Enable debug logging'
+        required: false
+        default: false
+        type: boolean
+      skip_update:
+        description: 'Only run report, skip update (audit only)'
+        required: false
+        default: false
+        type: boolean
+      api_base_url:
+        description: 'Base URL for the Gruntwork API'
+        required: false
+        default: 'https://api.prod.app.gruntwork.io/api/v1'
+        type: string
+      pipelines_credentials_repo:
+        description: 'Repository for pipelines-credentials action'
+        required: false
+        default: 'gruntwork-io/pipelines-credentials'
+        type: string
+      pipelines_credentials_ref:
+        description: 'Ref (tag or branch) for pipelines-credentials'
+        required: false
+        default: 'v1.2.0'
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  do-not-merge:
-    name: Check for README-TO-COMPLETE-UPDATE.md files
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check file existence
-        id: check_files
-        uses: andstor/file-existence-action@v3
-        with:
-          files: "**/README-TO-COMPLETE-UPDATE.md"
-
-      - name: File exists
-        if: steps.check_files.outputs.files_exists == 'true'
-        run: |
-          echo "This pull request contains `README-TO-COMPLETE-UPDATE.md` files"
-          echo "Check for outstanding `README-TO-COMPLETE-UPDATE.md` files"
-          echo "This check will pass, when all the outstanding files have been actioned and deleted"
-          exit 1
+  patcher:
+    uses: gruntwork-io/patcher-action/.github/workflows/patcher.yml@v4
+    with:
+      runner: ${{ inputs.runner }}
+      patcher_version: ${{ inputs.patcher_version }}
+      terrapatch_version: ${{ inputs.terrapatch_version }}
+      working_dir: ${{ inputs.working_dir }}
+      include_dirs: ${{ inputs.include_dirs }}
+      exclude_dirs: ${{ inputs.exclude_dirs }}
+      update_strategy: ${{ inputs.update_strategy }}
+      spec_file: ${{ inputs.spec_file }}
+      dependency: ${{ inputs.dependency }}
+      pull_request_branch: ${{ inputs.pull_request_branch }}
+      pull_request_title: ${{ inputs.pull_request_title }}
+      commit_author_name: ${{ inputs.commit_author_name }}
+      commit_author_email: ${{ inputs.commit_author_email }}
+      dry_run: ${{ inputs.dry_run }}
+      no_color: ${{ inputs.no_color }}
+      debug: ${{ inputs.debug }}
+      skip_update: ${{ inputs.skip_update }}
+      api_base_url: ${{ inputs.api_base_url }}
+      pipelines_credentials_repo: ${{ inputs.pipelines_credentials_repo }}
+      pipelines_credentials_ref: ${{ inputs.pipelines_credentials_ref }}
+    secrets:
+      PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+      PR_CREATE_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}

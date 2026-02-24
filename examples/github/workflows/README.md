@@ -1,10 +1,11 @@
 # Patcher Action Examples
 
-The promotional workflow uses 5 GitHub Actions workflows: 
+The promotional workflow uses 6 GitHub Actions workflows: 
 - `update-dev.yml` - this is the *Update Dev Dependencies* workflow, this workflow can be run periodically or tiggered by a release in an upstream infrastructure module repo
 - `update-stage.yml` - this is the *Update Stage Dependencies* workflow
 - `update-prod.yml` - this is the *Update Prod Dependencies* workflow
-- `patcher.yml` - this is the *Patcher* workflow that prevents a PR being merged if it contains outstanding `README-TO-COMPLETE-UPDATE.md` files
+- `patcher.yml` - *Patcher*: `workflow_dispatch`-only workflow that runs Patcher and exposes all inputs (dry_run, include_dirs, exclude_dirs, skip_update, dependency, etc.) so you can exercise every permutation from the Actions "Run workflow" UI
+- `patcher-readme-check.yml` - *Patcher Readme Check*: prevents a PR being merged if it contains outstanding `README-TO-COMPLETE-UPDATE.md` files
 - `labeler.yml` - this is the *Labeler* workflow that ensures that the PRs are correctly labelled
 
 ## The Updates Dependencies Workflows
@@ -27,6 +28,8 @@ The promotional workflow uses 5 GitHub Actions workflows:
     - You can limit the bot's access to exactly the repos needed, in line with the principle of least access.
     - If a human user leaves your GitHub org, the Patcher bot will remain in place.
     - Be sure to safely store the login credentials for this user. For example, at Gruntwork, credentials for GitHub Machine Users are stored in 1Password where they are shared with exactly the right people.
+
+- The *Patcher* example workflow (`patcher.yml`) is triggered only by **Run workflow**. It runs the reusable patcher workflow and forwards every input (runner, versions, working_dir, include_dirs, exclude_dirs, update_strategy, spec_file, dependency, PR options, dry_run, no_color, debug, skip_update, API/credentials repo refs). Use it to test combinations (e.g. dry_run + include_dirs, or skip_update only) without editing YAML.
 
 - Environment or account folder names can be set in the workflow file by using the `include_dirs` and `exclude_dirs` action inputs.
 
@@ -60,9 +63,9 @@ The *Update Dev Dependencies* and *Update Stage Dependencies* workflows both hav
 This job runs only if the workflow was triggered by the merging of a PR that has an `updates-<env>` label.
 
 ## The Patcher Readme Check Workflow
-The *Patcher* workflow consists of a single job that is triggered when a PR is opened, reopened or modified.
+The *Patcher Readme Check* workflow (`patcher-readme-check.yml`) consists of a single job that is triggered when a PR is opened, reopened or modified.
 
-The `do-not-merge` job fails if any the branch being merged contains any `README-TO-COMPLETE-UPDATE.md` files.
+The `do-not-merge` job fails if the branch being merged contains any `README-TO-COMPLETE-UPDATE.md` files.
 
 ## The Labeler Workflow
 The Labeler GitHub Actions workflow uses the [Pull Request Labeler](https://github.com/actions/labeler) GitHub Action to ensure the PR is correctly labelled.
