@@ -296,20 +296,11 @@ jobs:
           echo "=== One level down (maxdepth 2, first 40 entries) ==="
           find . -maxdepth 2 -print | sort | head -40
 
-      # Download to a subdirectory so the artifact does not overwrite the workspace (and remove the checked-out repo)
+      # Download artifact to workspace root so spec lands alongside repo (matches main/TypeScript flow).
       - name: Download spec file
         uses: actions/download-artifact@v4
         with:
           name: patcher-spec
-          path: .patcher-spec
-
-      - name: Place spec at workspace root
-        run: |
-          if [[ -f ".patcher-spec/${{ inputs.spec_file }}" ]]; then
-            mv ".patcher-spec/${{ inputs.spec_file }}" .
-          else
-            echo "Spec file not found at .patcher-spec/${{ inputs.spec_file }}" && exit 1
-          fi
 
       # Parsing errors in logs (e.g. retryable_errors in HCL) are expected when repo HCL is invalid.
       - name: Debug workspace before update (spec + repo paths)
@@ -318,11 +309,11 @@ jobs:
           echo "$GITHUB_WORKSPACE"
           echo "=== CWD ==="
           pwd
-          echo "=== Spec file at root? ==="
+          echo "=== Spec file at root (after artifact download) ==="
           ls -la "${{ inputs.spec_file }}" || true
           echo "=== Top-level (maxdepth 1) ==="
           find . -maxdepth 1 -print | sort
-          echo "=== Sample paths from spec (first 5 file paths if present) ==="
+          echo "=== Spec path format: sample paths from spec (first 5 if present) ==="
           ( jq -r '.Dependencies[]?.Usages[]? | (.FilePath // .UsagePath // .Path // .File) // empty' "${{ inputs.spec_file }}" 2>/dev/null || \
             jq -r '.. | objects | .FilePath? // .UsagePath? // .Path? // .File? // empty' "${{ inputs.spec_file }}" 2>/dev/null ) | head -5 | while read -r p; do
             if [[ -n "$p" ]]; then
@@ -331,7 +322,7 @@ jobs:
           done
           echo "=== First dependency structure (keys) ==="
           jq '.Dependencies[0] | keys' "${{ inputs.spec_file }}" 2>/dev/null || echo "(jq or spec structure not as expected)"
-          echo "=== Verify a sandbox path exists (patcher will resolve paths under CWD) ==="
+          echo "=== Patcher will run with CWD=REPO_ROOT and working_dir=.; verify relative paths exist ==="
           for d in dev663test-sandbox mydemosandbox-sandbox; do
             if [[ -d "$d" ]]; then
               echo "  dir EXISTS: $d"
@@ -378,26 +369,29 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          # Ensure we run from repo root so paths in the spec resolve correctly
+          # Run from repo root and pass relative working dir + spec so patcher resolves paths like the TypeScript action.
           REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
           if [[ -z "$GITHUB_WORKSPACE" ]]; then
             echo "::warning::GITHUB_WORKSPACE was empty, using REPO_ROOT=$(pwd)"
           fi
           cd "$REPO_ROOT"
 
-          WORKING_DIR_ABS="$REPO_ROOT"
+          # Use relative paths for patcher so path resolution matches main (TypeScript) behavior.
           WD="${{ inputs.working_dir }}"
-          if [[ -n "$WD" && "$WD" != "." && "$WD" != "./" ]]; then
-            WORKING_DIR_ABS="${REPO_ROOT}/${WD%/}"
+          if [[ -z "$WD" || "$WD" == "." || "$WD" == "./" ]]; then
+            PATCHER_WORKING_DIR="."
+          else
+            PATCHER_WORKING_DIR="${WD%/}"
           fi
-          SPEC_FILE_ABS="${REPO_ROOT}/${{ inputs.spec_file }}"
+          SPEC_FILE_REL="${{ inputs.spec_file }}"
 
           echo "=== Patcher update path debug ==="
           echo "REPO_ROOT=$REPO_ROOT"
-          echo "SPEC_FILE_ABS=$SPEC_FILE_ABS"
-          echo "WORKING_DIR_ABS=$WORKING_DIR_ABS"
-          echo "spec exists: $(test -f "$SPEC_FILE_ABS" && echo yes || echo no)"
-          echo "working dir exists: $(test -d "$WORKING_DIR_ABS" && echo yes || echo no)"
+          echo "CWD=$(pwd)"
+          echo "PATCHER_WORKING_DIR=$PATCHER_WORKING_DIR"
+          echo "SPEC_FILE_REL=$SPEC_FILE_REL"
+          echo "spec exists: $(test -f "$SPEC_FILE_REL" && echo yes || echo no)"
+          echo "working dir exists: $(test -d "$PATCHER_WORKING_DIR" && echo yes || echo no)"
 
           PR_BRANCH="${{ inputs.pull_request_branch }}"
           if [[ -z "$PR_BRANCH" ]]; then
@@ -410,7 +404,7 @@ jobs:
 
           UPDATE_ARGS=(update --non-interactive --skip-container-runtime \
             "--update-strategy=${{ inputs.update_strategy }}" \
-            "--spec-file=${SPEC_FILE_ABS}" \
+            "--spec-file=${SPEC_FILE_REL}" \
             --publish \
             "--pr-branch=${PR_BRANCH}" \
             "--pr-title=${{ inputs.pull_request_title }}")
@@ -427,7 +421,7 @@ jobs:
             UPDATE_ARGS+=(--no-color)
           fi
 
-          UPDATE_ARGS+=("${WORKING_DIR_ABS}")
+          UPDATE_ARGS+=("${PATCHER_WORKING_DIR}")
 
           echo "=== Pre-invocation debug (CWD and target path check) ==="
           echo "CWD=$(pwd)"
