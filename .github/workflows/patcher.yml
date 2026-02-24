@@ -93,15 +93,15 @@ on:
     outputs:
       spec:
         description: "Upgrade specification JSON produced by patcher report."
-        value: ${{ jobs.patcher-report.outputs.spec }}
+        value: ${{ jobs.patcher.outputs.spec }}
 
 jobs:
-  patcher-report:
-    name: Patcher Report
+  patcher:
+    name: Patcher Report and Update
     runs-on: ${{ fromJson(inputs.runner) }}
     permissions:
       id-token: write
-      contents: read
+      contents: write
     outputs:
       spec: ${{ steps.run-report.outputs.spec }}
       has_dependencies: ${{ steps.run-report.outputs.has_dependencies }}
@@ -128,12 +128,19 @@ jobs:
           PIPELINES_TOKEN_PATH: "pipelines-read/${{ github.repository_owner }}"
           FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
 
+      - name: Fetch PR Create Token
+        id: pr-create-token
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "propose-infra-change/${{ github.repository_owner }}"
+          FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
+
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
 
-      - name: Debug workspace after checkout (report job)
+      - name: Debug workspace after checkout
         run: |
           echo "=== GITHUB_WORKSPACE ==="
           echo "$GITHUB_WORKSPACE"
@@ -179,7 +186,6 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          # Ensure we run from repo root for consistent path resolution
           REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
           if [[ -z "$GITHUB_WORKSPACE" ]]; then
             echo "::warning::GITHUB_WORKSPACE was empty, using REPO_ROOT=$(pwd)"
@@ -231,7 +237,7 @@ jobs:
 
       - name: Debug after report (spec and workspace)
         run: |
-          echo "=== Spec file exists? ==="
+          echo "=== Spec file ==="
           ls -la "${{ inputs.spec_file }}" || true
           echo "=== Spec first 30 lines ==="
           head -30 "${{ inputs.spec_file }}" || true
@@ -244,123 +250,8 @@ jobs:
           name: patcher-spec
           path: ${{ inputs.spec_file }}
 
-  patcher-update:
-    name: Patcher Update
-    needs: patcher-report
-    if: ${{ inputs.skip_update == false && needs.patcher-report.outputs.has_dependencies == 'true' }}
-    runs-on: ${{ fromJson(inputs.runner) }}
-    permissions:
-      id-token: write
-      contents: write
-    steps:
-      - name: Checkout pipelines-credentials
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.pipelines_credentials_repo }}
-          ref: ${{ inputs.pipelines_credentials_ref }}
-          token: ${{ secrets.PIPELINES_READ_TOKEN }}
-          path: .pipelines-credentials
-
-      - name: Fetch Gruntwork Read Token
-        id: gruntwork-read-token
-        uses: ./.pipelines-credentials
-        with:
-          PIPELINES_TOKEN_PATH: "pipelines-read/gruntwork-io"
-          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
-
-      - name: Fetch Org Read Token
-        id: org-read-token
-        uses: ./.pipelines-credentials
-        with:
-          PIPELINES_TOKEN_PATH: "pipelines-read/${{ github.repository_owner }}"
-          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
-
-      - name: Fetch PR Create Token
-        id: pr-create-token
-        uses: ./.pipelines-credentials
-        with:
-          PIPELINES_TOKEN_PATH: "propose-infra-change/${{ github.repository_owner }}"
-          FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
-
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
-
-      - name: Debug workspace after checkout (update job)
-        run: |
-          echo "=== GITHUB_WORKSPACE ==="
-          echo "$GITHUB_WORKSPACE"
-          echo "=== Top-level (maxdepth 1) ==="
-          find . -maxdepth 1 -print | sort
-          echo "=== One level down (maxdepth 2, first 40 entries) ==="
-          find . -maxdepth 2 -print | sort | head -40
-
-      # Download artifact to workspace root so spec lands alongside repo (matches main/TypeScript flow).
-      - name: Download spec file
-        uses: actions/download-artifact@v4
-        with:
-          name: patcher-spec
-          path: .
-
-      # Parsing errors in logs (e.g. retryable_errors in HCL) are expected when repo HCL is invalid.
-      - name: Debug workspace before update (spec + repo paths)
-        run: |
-          echo "=== GITHUB_WORKSPACE ==="
-          echo "$GITHUB_WORKSPACE"
-          echo "=== CWD ==="
-          pwd
-          echo "=== Spec file at root (after artifact download) ==="
-          ls -la "${{ inputs.spec_file }}" || true
-          echo "=== Top-level (maxdepth 1) ==="
-          find . -maxdepth 1 -print | sort
-          echo "=== Spec path format: sample paths from spec (first 5 if present) ==="
-          ( jq -r '.Dependencies[]?.Usages[]? | (.FilePath // .UsagePath // .Path // .File) // empty' "${{ inputs.spec_file }}" 2>/dev/null || \
-            jq -r '.. | objects | .FilePath? // .UsagePath? // .Path? // .File? // empty' "${{ inputs.spec_file }}" 2>/dev/null ) | head -5 | while read -r p; do
-            if [[ -n "$p" ]]; then
-              if [[ -f "$p" ]]; then echo "  EXISTS: $p"; else echo "  MISSING: $p"; fi
-            fi
-          done
-          echo "=== First dependency structure (keys) ==="
-          jq '.Dependencies[0] | keys' "${{ inputs.spec_file }}" 2>/dev/null || echo "(jq or spec structure not as expected)"
-          echo "=== Patcher will run with CWD=REPO_ROOT and working_dir=.; verify relative paths exist ==="
-          for d in dev663test-sandbox mydemosandbox-sandbox; do
-            if [[ -d "$d" ]]; then
-              echo "  dir EXISTS: $d"
-              find "$d" -name "terragrunt.hcl" 2>/dev/null | head -2 | while read -r f; do echo "    $(test -f "$f" && echo EXISTS || echo MISSING): $f"; done
-            else
-              echo "  dir MISSING: $d"
-            fi
-          done
-
-      - name: Install Patcher and Terrapatch
-        env:
-          GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
-          PATCHER_VERSION: ${{ inputs.patcher_version }}
-          TERRAPATCH_VERSION: ${{ inputs.terrapatch_version }}
-        run: |
-          PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
-          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-
-          mkdir -p /tmp/patcher-install
-          GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$PATCHER_VERSION" \
-            --repo gruntwork-io/patcher-cli \
-            --pattern "patcher_${PLATFORM}_${ARCH}*" \
-            --dir /tmp/patcher-install
-          mv /tmp/patcher-install/patcher_* /tmp/patcher-install/patcher
-          chmod +x /tmp/patcher-install/patcher
-          echo "/tmp/patcher-install" >> "$GITHUB_PATH"
-
-          mkdir -p /tmp/terrapatch-install
-          GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$TERRAPATCH_VERSION" \
-            --repo gruntwork-io/terrapatch-cli \
-            --pattern "terrapatch_${PLATFORM}_${ARCH}*" \
-            --dir /tmp/terrapatch-install
-          mv /tmp/terrapatch-install/terrapatch_* /tmp/terrapatch-install/terrapatch
-          chmod +x /tmp/terrapatch-install/terrapatch
-          echo "/tmp/terrapatch-install" >> "$GITHUB_PATH"
-
       - name: Run patcher update
+        if: ${{ inputs.skip_update == false && steps.run-report.outputs.has_dependencies == 'true' }}
         env:
           GITHUB_OAUTH_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
           GITHUB_PUBLISH_TOKEN: ${{ steps.pr-create-token.outputs.PIPELINES_TOKEN }}
@@ -370,11 +261,7 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          # Run from repo root and use relative paths so patcher's path resolution matches CWD (avoids "FILE DOES NOT EXIST" when report/update run in separate jobs).
           REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
-          if [[ -z "$GITHUB_WORKSPACE" ]]; then
-            echo "::warning::GITHUB_WORKSPACE was empty, using REPO_ROOT=$(pwd)"
-          fi
           cd "$REPO_ROOT"
 
           WD="${{ inputs.working_dir }}"
@@ -384,14 +271,6 @@ jobs:
             PATCHER_WORKING_DIR="${WD%/}"
           fi
           SPEC_FILE="${{ inputs.spec_file }}"
-
-          echo "=== Patcher update path debug ==="
-          echo "REPO_ROOT=$REPO_ROOT"
-          echo "CWD=$(pwd)"
-          echo "PATCHER_WORKING_DIR=$PATCHER_WORKING_DIR"
-          echo "SPEC_FILE=$SPEC_FILE"
-          echo "spec exists: $(test -f "$SPEC_FILE" && echo yes || echo no)"
-          echo "working dir exists: $(test -d "$PATCHER_WORKING_DIR" && echo yes || echo no)"
 
           PR_BRANCH="${{ inputs.pull_request_branch }}"
           if [[ -z "$PR_BRANCH" ]]; then
@@ -423,23 +302,6 @@ jobs:
 
           UPDATE_ARGS+=("${PATCHER_WORKING_DIR}")
 
-          echo "=== Pre-invocation debug (CWD and target path check) ==="
-          echo "CWD=$(pwd)"
-          echo "Invocation: patcher ${UPDATE_ARGS[*]}"
-          for sample in mydemosandbox-sandbox/_global/cloudtrail/terragrunt.hcl dev663test-sandbox/_global/access-control-apply-role/terragrunt.hcl; do
-            if [[ -f "$sample" ]]; then echo "  EXISTS: $sample"; else echo "  MISSING: $sample"; fi
-          done
-          echo "=== Spec path format (any path-like keys in first dependency) ==="
-          jq -r '.Dependencies[0] | to_entries[] | select(.key | test("path|Path|file|File"; "i")) | "\(.key): \(.value)"' "$SPEC_FILE" 2>/dev/null | head -20 || true
-          if jq -e '.Dependencies[0].Usages[0]' "$SPEC_FILE" >/dev/null 2>&1; then
-            echo "First usage path fields:"
-            jq -r '.Dependencies[0].Usages[0] | to_entries[] | select(.key | test("path|Path|file|File"; "i")) | "\(.key): \(.value)"' "$SPEC_FILE" 2>/dev/null || true
-          fi
-
+          echo "=== Running patcher update (same job as report, spec on disk) ==="
+          echo "CWD=$(pwd) SPEC_FILE=$SPEC_FILE PATCHER_WORKING_DIR=$PATCHER_WORKING_DIR"
           patcher "${UPDATE_ARGS[@]}"
-          PATCHER_EXIT=$?
-          echo "=== Post-patcher debug (path still present?) ==="
-          for sample in dev663test-sandbox/_global/access-control-apply-role/terragrunt.hcl; do
-            if [[ -f "$sample" ]]; then echo "  EXISTS: $sample"; else echo "  MISSING: $sample"; fi
-          done
-          exit $PATCHER_EXIT
