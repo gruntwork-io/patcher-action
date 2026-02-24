@@ -19,7 +19,7 @@ The promotional workflow uses 6 GitHub Actions workflows:
   - Grant **`id-token: write`** on the job that calls the patcher (so OIDC can be used), and/or
   - Pass **`PIPELINES_READ_TOKEN`** and **`PR_CREATE_TOKEN`** so the fallback works. If neither OIDC nor the fallback tokens are available, you will see: `Unable to get ACTIONS_ID_TOKEN_REQUEST_URL env variable` and `no FALLBACK_TOKEN provided`.
 
-- The example workflows set `permissions: id-token: write` and `contents: read` at the workflow level so that OIDC works when available. When calling a reusable workflow from another org, the caller must explicitly set `id-token: write` for the called workflow to receive OIDC.
+- The example workflows set `permissions: id-token: write` and `contents: write` at the workflow level. `id-token: write` is required for OIDC when calling the reusable workflow from another org. `contents: write` is required so the Patcher update job can push branches and create Pull Requests.
 
   - To allow the merging of a Pull Request to trigger other workflows, you need to use a repo-scoped GitHub Personal Access Token (PAT) created on an account that has write access to the repository that pull requests are being created in. This is the standard workaround [recommended by GitHub](https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow).
   - Patcher uses the PAT to access release information for Gruntwork modules, so it cannot be scoped to a specific repository and the token becomes a very sensitive secret.

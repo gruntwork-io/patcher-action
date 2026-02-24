@@ -133,6 +133,15 @@ jobs:
         with:
           token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
 
+      - name: Debug workspace after checkout (report job)
+        run: |
+          echo "=== GITHUB_WORKSPACE ==="
+          echo "$GITHUB_WORKSPACE"
+          echo "=== Top-level (maxdepth 1) ==="
+          find . -maxdepth 1 -print | sort
+          echo "=== One level down (maxdepth 2, first 40 entries) ==="
+          find . -maxdepth 2 -print | sort | head -40
+
       - name: Install Patcher and Terrapatch
         env:
           GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
@@ -213,6 +222,15 @@ jobs:
             echo "has_dependencies=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Debug after report (spec and workspace)
+        run: |
+          echo "=== Spec file exists? ==="
+          ls -la "${{ inputs.spec_file }}" || true
+          echo "=== Spec first 30 lines ==="
+          head -30 "${{ inputs.spec_file }}" || true
+          echo "=== Workspace top-level ==="
+          find . -maxdepth 1 -print | sort
+
       - name: Upload spec file
         uses: actions/upload-artifact@v4
         with:
@@ -262,21 +280,44 @@ jobs:
         with:
           token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
 
+      - name: Debug workspace after checkout (update job)
+        run: |
+          echo "=== GITHUB_WORKSPACE ==="
+          echo "$GITHUB_WORKSPACE"
+          echo "=== Top-level (maxdepth 1) ==="
+          find . -maxdepth 1 -print | sort
+          echo "=== One level down (maxdepth 2, first 40 entries) ==="
+          find . -maxdepth 2 -print | sort | head -40
+
+      # Download to a subdirectory so the artifact does not overwrite the workspace (and remove the checked-out repo)
       - name: Download spec file
         uses: actions/download-artifact@v4
         with:
           name: patcher-spec
+          path: .patcher-spec
 
-      # download-artifact extracts to a subdir named after the artifact; place spec at workspace root for patcher
       - name: Place spec at workspace root
         run: |
-          if [[ -f "patcher-spec/${{ inputs.spec_file }}" ]]; then
-            mv "patcher-spec/${{ inputs.spec_file }}" .
-          elif [[ -f "${{ inputs.spec_file }}" ]]; then
-            : # already at root (e.g. v5+ behavior)
+          if [[ -f ".patcher-spec/${{ inputs.spec_file }}" ]]; then
+            mv ".patcher-spec/${{ inputs.spec_file }}" .
           else
-            echo "Spec file not found after download" && exit 1
+            echo "Spec file not found at .patcher-spec/${{ inputs.spec_file }}" && exit 1
           fi
+
+      - name: Debug workspace before update (spec + repo paths)
+        run: |
+          echo "=== GITHUB_WORKSPACE ==="
+          echo "$GITHUB_WORKSPACE"
+          echo "=== Spec file at root? ==="
+          ls -la "${{ inputs.spec_file }}" || true
+          echo "=== Top-level (maxdepth 1) ==="
+          find . -maxdepth 1 -print | sort
+          echo "=== Sample paths from spec (first 5 Usages paths if present) ==="
+          jq -r '.Dependencies[]?.Usages[]?.UsagePath // empty' "${{ inputs.spec_file }}" 2>/dev/null | head -5 | while read -r p; do
+            if [[ -n "$p" ]]; then
+              if [[ -f "$p" ]]; then echo "  EXISTS: $p"; else echo "  MISSING: $p"; fi
+            fi
+          done || true
 
       - name: Install Patcher and Terrapatch
         env:
