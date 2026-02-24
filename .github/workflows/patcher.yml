@@ -369,29 +369,28 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          # Run from repo root and pass relative working dir + spec so patcher resolves paths like the TypeScript action.
+          # Use absolute paths for spec and working dir so path resolution matches report job and TypeScript action (README: "converts to absolute path so path resolution is consistent between report and update").
           REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
           if [[ -z "$GITHUB_WORKSPACE" ]]; then
             echo "::warning::GITHUB_WORKSPACE was empty, using REPO_ROOT=$(pwd)"
           fi
           cd "$REPO_ROOT"
 
-          # Use relative paths for patcher so path resolution matches main (TypeScript) behavior.
           WD="${{ inputs.working_dir }}"
           if [[ -z "$WD" || "$WD" == "." || "$WD" == "./" ]]; then
-            PATCHER_WORKING_DIR="."
+            PATCHER_WORKING_DIR_ABS="${REPO_ROOT}"
           else
-            PATCHER_WORKING_DIR="${WD%/}"
+            PATCHER_WORKING_DIR_ABS="${REPO_ROOT}/${WD%/}"
           fi
-          SPEC_FILE_REL="${{ inputs.spec_file }}"
+          SPEC_FILE_ABS="${REPO_ROOT}/${{ inputs.spec_file }}"
 
           echo "=== Patcher update path debug ==="
           echo "REPO_ROOT=$REPO_ROOT"
           echo "CWD=$(pwd)"
-          echo "PATCHER_WORKING_DIR=$PATCHER_WORKING_DIR"
-          echo "SPEC_FILE_REL=$SPEC_FILE_REL"
-          echo "spec exists: $(test -f "$SPEC_FILE_REL" && echo yes || echo no)"
-          echo "working dir exists: $(test -d "$PATCHER_WORKING_DIR" && echo yes || echo no)"
+          echo "PATCHER_WORKING_DIR_ABS=$PATCHER_WORKING_DIR_ABS"
+          echo "SPEC_FILE_ABS=$SPEC_FILE_ABS"
+          echo "spec exists: $(test -f "$SPEC_FILE_ABS" && echo yes || echo no)"
+          echo "working dir exists: $(test -d "$PATCHER_WORKING_DIR_ABS" && echo yes || echo no)"
 
           PR_BRANCH="${{ inputs.pull_request_branch }}"
           if [[ -z "$PR_BRANCH" ]]; then
@@ -404,7 +403,7 @@ jobs:
 
           UPDATE_ARGS=(update --non-interactive --skip-container-runtime \
             "--update-strategy=${{ inputs.update_strategy }}" \
-            "--spec-file=${SPEC_FILE_REL}" \
+            "--spec-file=${SPEC_FILE_ABS}" \
             --publish \
             "--pr-branch=${PR_BRANCH}" \
             "--pr-title=${{ inputs.pull_request_title }}")
@@ -421,7 +420,7 @@ jobs:
             UPDATE_ARGS+=(--no-color)
           fi
 
-          UPDATE_ARGS+=("${PATCHER_WORKING_DIR}")
+          UPDATE_ARGS+=("${PATCHER_WORKING_DIR_ABS}")
 
           echo "=== Pre-invocation debug (CWD and target path check) ==="
           echo "CWD=$(pwd)"
@@ -429,5 +428,11 @@ jobs:
           for sample in mydemosandbox-sandbox/_global/cloudtrail/terragrunt.hcl dev663test-sandbox/_global/access-control-apply-role/terragrunt.hcl; do
             if [[ -f "$sample" ]]; then echo "  EXISTS: $sample"; else echo "  MISSING: $sample"; fi
           done
+          echo "=== Spec path format (any path-like keys in first dependency) ==="
+          jq -r '.Dependencies[0] | to_entries[] | select(.key | test("path|Path|file|File"; "i")) | "\(.key): \(.value)"' "$SPEC_FILE_ABS" 2>/dev/null | head -20 || true
+          if jq -e '.Dependencies[0].Usages[0]' "$SPEC_FILE_ABS" >/dev/null 2>&1; then
+            echo "First usage path fields:"
+            jq -r '.Dependencies[0].Usages[0] | to_entries[] | select(.key | test("path|Path|file|File"; "i")) | "\(.key): \(.value)"' "$SPEC_FILE_ABS" 2>/dev/null || true
+          fi
 
           patcher "${UPDATE_ARGS[@]}"
