@@ -93,17 +93,18 @@ on:
     outputs:
       spec:
         description: "Upgrade specification JSON produced by patcher report."
-        value: ${{ jobs.patcher.outputs.spec }}
+        value: ${{ jobs.patcher-report.outputs.spec }}
 
 jobs:
-  patcher:
-    name: Patcher Report & Update
+  patcher-report:
+    name: Patcher Report
     runs-on: ${{ fromJson(inputs.runner) }}
     permissions:
       id-token: write
       contents: read
     outputs:
       spec: ${{ steps.run-report.outputs.spec }}
+      has_dependencies: ${{ steps.run-report.outputs.has_dependencies }}
     steps:
       - name: Checkout pipelines-credentials
         uses: actions/checkout@v4
@@ -126,14 +127,6 @@ jobs:
         with:
           PIPELINES_TOKEN_PATH: "pipelines-read/${{ github.repository_owner }}"
           FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
-
-      - name: Fetch PR Create Token
-        id: pr-create-token
-        if: ${{ inputs.skip_update == false }}
-        uses: ./.pipelines-credentials
-        with:
-          PIPELINES_TOKEN_PATH: "propose-infra-change/${{ github.repository_owner }}"
-          FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
 
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -177,7 +170,6 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          # Resolve working_dir and spec_file to absolute paths so report and update use the same paths
           WORKING_DIR_ABS="$GITHUB_WORKSPACE"
           WD="${{ inputs.working_dir }}"
           if [[ -n "$WD" && "$WD" != "." && "$WD" != "./" ]]; then
@@ -221,8 +213,99 @@ jobs:
             echo "has_dependencies=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Upload spec file
+        uses: actions/upload-artifact@v4
+        with:
+          name: patcher-spec
+          path: ${{ inputs.spec_file }}
+
+  patcher-update:
+    name: Patcher Update
+    needs: patcher-report
+    if: ${{ inputs.skip_update == false && needs.patcher-report.outputs.has_dependencies == 'true' }}
+    runs-on: ${{ fromJson(inputs.runner) }}
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Checkout pipelines-credentials
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.pipelines_credentials_repo }}
+          ref: ${{ inputs.pipelines_credentials_ref }}
+          token: ${{ secrets.PIPELINES_READ_TOKEN }}
+          path: .pipelines-credentials
+
+      - name: Fetch Gruntwork Read Token
+        id: gruntwork-read-token
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "pipelines-read/gruntwork-io"
+          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+
+      - name: Fetch Org Read Token
+        id: org-read-token
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "pipelines-read/${{ github.repository_owner }}"
+          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+
+      - name: Fetch PR Create Token
+        id: pr-create-token
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "propose-infra-change/${{ github.repository_owner }}"
+          FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
+
+      - name: Download spec file
+        uses: actions/download-artifact@v4
+        with:
+          name: patcher-spec
+
+      # download-artifact extracts to a subdir named after the artifact; place spec at workspace root for patcher
+      - name: Place spec at workspace root
+        run: |
+          if [[ -f "patcher-spec/${{ inputs.spec_file }}" ]]; then
+            mv "patcher-spec/${{ inputs.spec_file }}" .
+          elif [[ -f "${{ inputs.spec_file }}" ]]; then
+            : # already at root (e.g. v5+ behavior)
+          else
+            echo "Spec file not found after download" && exit 1
+          fi
+
+      - name: Install Patcher and Terrapatch
+        env:
+          GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          PATCHER_VERSION: ${{ inputs.patcher_version }}
+          TERRAPATCH_VERSION: ${{ inputs.terrapatch_version }}
+        run: |
+          PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+
+          mkdir -p /tmp/patcher-install
+          GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$PATCHER_VERSION" \
+            --repo gruntwork-io/patcher-cli \
+            --pattern "patcher_${PLATFORM}_${ARCH}*" \
+            --dir /tmp/patcher-install
+          mv /tmp/patcher-install/patcher_* /tmp/patcher-install/patcher
+          chmod +x /tmp/patcher-install/patcher
+          echo "/tmp/patcher-install" >> "$GITHUB_PATH"
+
+          mkdir -p /tmp/terrapatch-install
+          GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$TERRAPATCH_VERSION" \
+            --repo gruntwork-io/terrapatch-cli \
+            --pattern "terrapatch_${PLATFORM}_${ARCH}*" \
+            --dir /tmp/terrapatch-install
+          mv /tmp/terrapatch-install/terrapatch_* /tmp/terrapatch-install/terrapatch
+          chmod +x /tmp/terrapatch-install/terrapatch
+          echo "/tmp/terrapatch-install" >> "$GITHUB_PATH"
+
       - name: Run patcher update
-        if: ${{ inputs.skip_update == false && steps.run-report.outputs.has_dependencies == 'true' }}
         env:
           GITHUB_OAUTH_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
           GITHUB_PUBLISH_TOKEN: ${{ steps.pr-create-token.outputs.PIPELINES_TOKEN }}
@@ -232,14 +315,6 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          # Resolve working_dir and spec_file to the same absolute paths used in report
-          WORKING_DIR_ABS="$GITHUB_WORKSPACE"
-          WD="${{ inputs.working_dir }}"
-          if [[ -n "$WD" && "$WD" != "." && "$WD" != "./" ]]; then
-            WORKING_DIR_ABS="${GITHUB_WORKSPACE}/${WD%/}"
-          fi
-          SPEC_FILE_ABS="${GITHUB_WORKSPACE}/${{ inputs.spec_file }}"
-
           PR_BRANCH="${{ inputs.pull_request_branch }}"
           if [[ -z "$PR_BRANCH" ]]; then
             if [[ -n "${{ inputs.dependency }}" ]]; then
@@ -251,7 +326,7 @@ jobs:
 
           UPDATE_ARGS=(update --non-interactive --skip-container-runtime \
             "--update-strategy=${{ inputs.update_strategy }}" \
-            "--spec-file=${SPEC_FILE_ABS}" \
+            "--spec-file=${{ inputs.spec_file }}" \
             --publish \
             "--pr-branch=${PR_BRANCH}" \
             "--pr-title=${{ inputs.pull_request_title }}")
@@ -268,6 +343,6 @@ jobs:
             UPDATE_ARGS+=(--no-color)
           fi
 
-          UPDATE_ARGS+=("${WORKING_DIR_ABS}")
+          UPDATE_ARGS+=("${{ inputs.working_dir }}")
 
           patcher "${UPDATE_ARGS[@]}"
