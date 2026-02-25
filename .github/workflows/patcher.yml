@@ -90,6 +90,14 @@ on:
         description: "Ref (tag or branch) for the pipelines-credentials action."
         type: string
         default: "v1.2.0"
+      pipelines_actions_repo:
+        description: "Repository for pipelines-actions (used for Configure code auth)."
+        type: string
+        default: "gruntwork-io/pipelines-actions"
+      pipelines_actions_ref:
+        description: "Ref (tag or branch) for pipelines-actions."
+        type: string
+        default: "v4.3.0"
     outputs:
       spec:
         description: "Upgrade specification JSON produced by patcher report."
@@ -120,6 +128,7 @@ jobs:
         with:
           PIPELINES_TOKEN_PATH: "pipelines-read/gruntwork-io"
           FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+          api_base_url: ${{ inputs.api_base_url }}
 
       - name: Fetch Org Read Token
         id: org-read-token
@@ -127,6 +136,7 @@ jobs:
         with:
           PIPELINES_TOKEN_PATH: "pipelines-read/${{ github.repository_owner }}"
           FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+          api_base_url: ${{ inputs.api_base_url }}
 
       - name: Fetch PR Create Token
         id: pr-create-token
@@ -134,11 +144,28 @@ jobs:
         with:
           PIPELINES_TOKEN_PATH: "propose-infra-change/${{ github.repository_owner }}"
           FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
+          api_base_url: ${{ inputs.api_base_url }}
+
+      - name: Checkout Pipelines Actions
+        id: checkout-actions
+        uses: actions/checkout@v4
+        with:
+          path: pipelines-actions
+          repository: ${{ inputs.pipelines_actions_repo }}
+          ref: ${{ inputs.pipelines_actions_ref }}
+          token: ${{ inputs.pipelines_actions_repo == 'gruntwork-io/pipelines-actions' && steps.gruntwork-read-token.outputs.PIPELINES_TOKEN || steps.org-read-token.outputs.PIPELINES_TOKEN }}
 
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
+
+      - name: Configure code auth
+        uses: ./pipelines-actions/.github/actions/pipelines-code-auth
+        with:
+          PIPELINES_GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          PIPELINES_CUSTOMER_ORG_READ_TOKEN: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
 
       - name: Debug workspace after checkout
         run: |
