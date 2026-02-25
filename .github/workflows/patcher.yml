@@ -168,15 +168,6 @@ jobs:
           PIPELINES_GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
           PIPELINES_CUSTOMER_ORG_READ_TOKEN: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
 
-      - name: Debug workspace after checkout
-        run: |
-          echo "=== GITHUB_WORKSPACE ==="
-          echo "$GITHUB_WORKSPACE"
-          echo "=== Top-level (maxdepth 1) ==="
-          find . -maxdepth 1 -print | sort
-          echo "=== infra-live-repo (maxdepth 2, first 40) ==="
-          find ./infra-live-repo -maxdepth 2 -print | sort | head -40
-
       - name: Install Patcher and Terrapatch
         env:
           GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
@@ -260,15 +251,6 @@ jobs:
             echo "has_dependencies=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Debug after report (spec and workspace)
-        run: |
-          echo "=== Spec file ==="
-          ls -la "infra-live-repo/${{ inputs.spec_file }}" || true
-          echo "=== Spec first 30 lines ==="
-          head -30 "infra-live-repo/${{ inputs.spec_file }}" || true
-          echo "=== infra-live-repo top-level ==="
-          find infra-live-repo -maxdepth 1 -print | sort
-
       - name: Upload spec file
         uses: actions/upload-artifact@v4
         with:
@@ -327,6 +309,4 @@ jobs:
 
           UPDATE_ARGS+=("${PATCHER_WORKING_DIR}")
 
-          echo "=== Running patcher update (same job as report, spec on disk) ==="
-          echo "CWD=$(pwd) SPEC_FILE=$SPEC_FILE PATCHER_WORKING_DIR=$PATCHER_WORKING_DIR"
           patcher "${UPDATE_ARGS[@]}"
