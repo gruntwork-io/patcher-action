@@ -149,6 +149,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
+          path: infra-live-repo
           fetch-depth: 0
           token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
 
@@ -173,8 +174,8 @@ jobs:
           echo "$GITHUB_WORKSPACE"
           echo "=== Top-level (maxdepth 1) ==="
           find . -maxdepth 1 -print | sort
-          echo "=== One level down (maxdepth 2, first 40 entries) ==="
-          find . -maxdepth 2 -print | sort | head -40
+          echo "=== infra-live-repo (maxdepth 2, first 40) ==="
+          find ./infra-live-repo -maxdepth 2 -print | sort | head -40
 
       - name: Install Patcher and Terrapatch
         env:
@@ -213,10 +214,7 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
-          if [[ -z "$GITHUB_WORKSPACE" ]]; then
-            echo "::warning::GITHUB_WORKSPACE was empty, using REPO_ROOT=$(pwd)"
-          fi
+          REPO_ROOT="${GITHUB_WORKSPACE}/infra-live-repo"
           cd "$REPO_ROOT"
 
           WORKING_DIR_ABS="$REPO_ROOT"
@@ -265,17 +263,17 @@ jobs:
       - name: Debug after report (spec and workspace)
         run: |
           echo "=== Spec file ==="
-          ls -la "${{ inputs.spec_file }}" || true
+          ls -la "infra-live-repo/${{ inputs.spec_file }}" || true
           echo "=== Spec first 30 lines ==="
-          head -30 "${{ inputs.spec_file }}" || true
-          echo "=== Workspace top-level ==="
-          find . -maxdepth 1 -print | sort
+          head -30 "infra-live-repo/${{ inputs.spec_file }}" || true
+          echo "=== infra-live-repo top-level ==="
+          find infra-live-repo -maxdepth 1 -print | sort
 
       - name: Upload spec file
         uses: actions/upload-artifact@v4
         with:
           name: patcher-spec
-          path: ${{ inputs.spec_file }}
+          path: infra-live-repo/${{ inputs.spec_file }}
 
       - name: Run patcher update
         if: ${{ inputs.skip_update == false && steps.run-report.outputs.has_dependencies == 'true' }}
@@ -288,7 +286,7 @@ jobs:
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
         run: |
-          REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
+          REPO_ROOT="${GITHUB_WORKSPACE}/infra-live-repo"
           cd "$REPO_ROOT"
 
           WD="${{ inputs.working_dir }}"
