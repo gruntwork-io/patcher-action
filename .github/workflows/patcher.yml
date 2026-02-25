@@ -146,6 +146,12 @@ jobs:
           FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
           api_base_url: ${{ inputs.api_base_url }}
 
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
+
       - name: Checkout Pipelines Actions
         id: checkout-actions
         uses: actions/checkout@v4
@@ -154,12 +160,6 @@ jobs:
           repository: ${{ inputs.pipelines_actions_repo }}
           ref: ${{ inputs.pipelines_actions_ref }}
           token: ${{ inputs.pipelines_actions_repo == 'gruntwork-io/pipelines-actions' && steps.gruntwork-read-token.outputs.PIPELINES_TOKEN || steps.org-read-token.outputs.PIPELINES_TOKEN }}
-
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
 
       - name: Configure code auth
         uses: ./pipelines-actions/.github/actions/pipelines-code-auth
