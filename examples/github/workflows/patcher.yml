@@ -1,26 +1,67 @@
+# Example workflow that runs Patcher with all inputs exposed for testing permutations.
+#
+# Use "Run workflow" in the Actions UI to exercise different combinations of:
+# dry_run, include_dirs, exclude_dirs, skip_update, dependency, update_strategy, etc.
+#
+# Requires secrets: PIPELINES_READ_TOKEN, PR_CREATE_TOKEN
+
 name: Patcher
 
 on:
-  pull_request:
-    types: [synchronize, opened, reopened]
+  workflow_dispatch:
+    inputs:
+      include_dirs:
+        description: 'Include only dirs matching this double-star glob (report only). E.g. "{*dev*}/**"'
+        required: false
+        default: ''
+        type: string
+      exclude_dirs:
+        description: 'Exclude dirs matching this double-star glob (report only). E.g. "{*alb*}/**"'
+        required: false
+        default: ''
+        type: string
+      update_strategy:
+        description: 'Update strategy for patcher update'
+        required: false
+        default: 'next-breaking'
+        type: string
+      pull_request_branch:
+        description: 'Branch for PRs (default: patcher-updates or patcher-updates-<dependency>)'
+        required: false
+        default: ''
+        type: string
+      dry_run:
+        description: 'Simulate operations without making changes'
+        required: false
+        default: false
+        type: boolean
+      debug:
+        description: 'Enable debug logging'
+        required: false
+        default: false
+        type: boolean
+      skip_update:
+        description: 'Only run report, skip update (audit only)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: write
 
 jobs:
-  do-not-merge:
-    name: Check for README-TO-COMPLETE-UPDATE.md files
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check file existence
-        id: check_files
-        uses: andstor/file-existence-action@v3
-        with:
-          files: "**/README-TO-COMPLETE-UPDATE.md"
-
-      - name: File exists
-        if: steps.check_files.outputs.files_exists == 'true'
-        run: |
-          echo "This pull request contains `README-TO-COMPLETE-UPDATE.md` files"
-          echo "Check for outstanding `README-TO-COMPLETE-UPDATE.md` files"
-          echo "This check will pass, when all the outstanding files have been actioned and deleted"
-          exit 1
+  patcher:
+    uses: gruntwork-io/patcher-action/.github/workflows/patcher.yml@v5
+    with:
+      include_dirs: ${{ inputs.include_dirs }}
+      exclude_dirs: ${{ inputs.exclude_dirs }}
+      working_dir: ./
+      update_strategy: ${{ inputs.update_strategy }}
+      pull_request_branch: ${{ inputs.pull_request_branch }}
+      dry_run: ${{ inputs.dry_run }}
+      debug: ${{ inputs.debug }}
+      skip_update: ${{ inputs.skip_update }}
+    secrets:
+      PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+      PR_CREATE_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}

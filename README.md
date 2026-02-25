@@ -1,110 +1,81 @@
-# patcher-action
+# Patcher Action
 
-A GitHub Action for running Patcher.
+Reusable GitHub Actions workflow to discover, update, and PR Terragrunt deps using [Patcher](https://github.com/gruntwork-io/patcher-cli).
 
-> [!IMPORTANT]
-> Patcher is currently in beta and is only available to Gruntwork customers. If you're interested in using Patcher to update your
-> Terraform/Terragrunt dependencies, please contact our sales team at sales@gruntwork.io.
+## How the workflow runs
 
-You can find out more about Gruntwork Patcher at [gruntwork.io](https://gruntwork.io/patcher) and by reading the [latest docs](https://docs.gruntwork.io/patcher/).
+The workflow (`.github/workflows/patcher.yml`) is a **single job** that:
 
-## Usage
+1. **Checks out your infrastructure repo** so changes can be made.
+2. **Installs Patcher and Terrapatch**.
+3. **Runs Patcher to detect outdated dependencies** and generates an upgrade spec (such as `spec.json`).
+4. **Uploads the upgrade spec** as an artifact for later viewing/use.
+5. **Runs Patcher to apply updates** using the spec and **automatically opens a Pull Request** with any changes found (if updates are required).
 
-Refer to the [/examples/github/workflows](/examples/github/workflows) folder for use cases of the action.
+This process is fully automated—just call the workflow, and it will discover, update, and PR Terragrunt dependencies as needed.
 
-### Basic
 
-It will run `patcher update` in the whole repo, and open a Pull Request with the changes.
+## Requirements
 
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: gruntwork-io/patcher-action
-```
+### Repo layout
 
-### Action inputs
+The workflow expects to be invoked from (or for) the **repository that contains your Terragrunt/infrastructure code**. It checks out that repo into `infra-live-repo` and runs Patcher there.
 
-| Name                     | Description                                                                                                                                                                                              | Default                                        |
-|--------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
-| `PATCHER_READ_TOKEN`   | Token used to download Patcher binaries from Gruntwork repositories and read dependency info from Gruntwork module repositories. This token needs read access to gruntwork-io repos. | Required                                       |
-| `PATCHER_EXECUTE_TOKEN`| Token used for 'update' to interact with your repository: get repo info, push changes, and create PRs. This token needs write access to your infrastructure repo. If left unset, `PATCHER_READ_TOKEN` will be used. | Optional                                       |
-| `github_base_url`        | Base URL for GitHub (e.g., 'https://github.company.com' for GitHub Enterprise). Defaults to 'https://github.com' for GitHub.com.                                                                      | `https://github.com`                          |
-| `github_org`             | Organization name in GitHub.                                                                                                                                                            | `gruntwork-io`                                 |
-| `patcher_command`        | Patcher command to run. Valid options: `update` or `report`.                                                                                                                                             | `update`                                       |
-| `patcher_git_repo`       | Repository name for downloading patcher cli.                                                                                                                                                             | `patcher-cli`                                  |
-| `patcher_version`        | Version of Patcher to use.                                                                                                                                                                               | `v0.16.0`                                      |
-| `terrapatch_git_repo`    | Repository name for downloading terrapatch cli.                                                                                                                                                          | `terrapatch-cli`                               |
-| `terrapatch_version`     | Version of terrapatch to use.                                                                                                                                                                            | `v0.1.6`                                       |
-| `terrapatch_github_org`  | Organization name for terrapatch repository in GitHub. Defaults to same as github_org.                                                                                                    | Same as `github_org`                              |
-| `working_dir`            | Directory where Patcher should run. If empty, it will run in the whole repo.                                                                                                                             |                                                |
-| `update_strategy`        | Update strategy. Only used when running `update`. Valid options: `next-safe` or `next-breaking`. Refer to the ["Update Strategies" documentation](https://docs.gruntwork.io/patcher/update-strategies).  | `next-breaking`                                |
-| `include_dirs`           | List of directories to include using a double-star glob pattern. Only used when running `report`.                                                                                                        |                                                |
-| `exclude_dirs`           | List of directories to exclude using a double-star glob pattern. Only used when running `report`.                                                                                                        |                                                |
-| `spec_file`              | Default name of the upgrade specification file. This is used by Patcher to restrict an upgrade to certain dependencies.                                                                                  | `spec.json`                                    |
-| `dependency`             | Limit the update to a single dependency. Only used when running `update`. Format: `<org>/<repo>/<name>`. Example: `gruntwork-io/terraform-aws-service-catalog/services/ecs-module`.                      |                                                |
-| `commit_author`          | Author of the Pull Request's commits in the format `Name <name@email.com>`. Only used when running `update`. The permissions to push the changes and to create the Pull Request are from `PATCHER_EXECUTE_TOKEN`. | `gruntwork-patcher-bot <patcher@gruntwork.io>` |
-| `pull_request_branch`       | Branch to use when creating the Pull Request. Required when running `update`.                                                                                                                            |                                                |
-| `pull_request_title`               | Title of the Pull Request. Only used when running `update`.                                                                                                                                              | `[Patcher] Update dependencies`                |
-| `dry_run`                | Simulate all operations using Patcher's dry-run mode. Useful for test workflows. Only used when running `update`.                                                                                        | `false`                                        |
-| `no_color`               | Whether to disable color output.                                                                                                                                                                         | `false`                                        |
+## Resiliency
 
-### Action outputs
+The following secrets are only needed if you are **not** using OIDC, or if your setup requires explicit tokens as a fallback:
 
-- `spec`: All discovered dependencies from the given directory using any filters. Only works for `report`.
-- `updateResult`: The result of the upgrade. Only works for `update`.
+| Secret | Purpose |
+|--------|--------|
+| `PIPELINES_READ_TOKEN` | Download Patcher/Terrapatch, read Gruntwork modules and your repos. Used as a fallback when OIDC is not available. |
+| `PR_CREATE_TOKEN` | Push branches and create Pull Requests in your infrastructure repo. Used as a fallback when OIDC is not available. |
 
-### Using alternative GitHub repositories.
+## How to use it
 
-By default, the action retrieves Patcher and Terrapatch from the official Gruntwork repositories. You can also point it
-to other repositories, like your own forks, by using these inputs:
+Call the reusable workflow from your repo. Minimal example:
 
 ```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: gruntwork-io/patcher-action@v2
+jobs:
+  patcher:
+    uses: gruntwork-io/patcher-action/.github/workflows/patcher.yml@v5
     with:
-      github_org: "my-org"                         # Use your organisation instead of gruntwork-io
-      patcher_git_repo: "my-patcher-cli"           # Use your fork name if it is different
-      terrapatch_git_repo: "my-terrapatch-cli"
+      working_dir: ./
+      include_dirs: "{*dev*}/**"   # optional: limit report to dirs matching this glob
+    secrets:
+      PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+      PR_CREATE_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
 ```
 
-> [!NOTE]
-> The repositories you select must have valid releases. They must use the same asset naming rules as the official
-> Gruntwork repos.
+## Key inputs
 
-### Using with GitHub Enterprise
+| Input | Default | Description |
+|-------|---------|-------------|
+| `working_dir` | `"./"` | Directory inside the repo where Patcher runs (relative to repo root). |
+| `include_dirs` | `""` | Report only: include dirs matching this double-star glob (e.g. `"{*dev*}/**"`). |
+| `exclude_dirs` | `""` | Report only: exclude dirs matching this double-star glob. |
+| `update_strategy` | `"next-breaking"` | Patcher update strategy: `next-safe` or `next-breaking`. |
+| `spec_file` | `"spec.json"` | Filename for the upgrade spec (relative to repo root). |
+| `dependency` | `""` | Optional: limit update to one dependency (e.g. `gruntwork-io/terraform-aws-security/github-actions-iam-role`). |
+| `pull_request_branch` | `"patcher-updates"` | Branch name for the PR (or `patcher-updates-<dependency>` when `dependency` is set). |
+| `skip_update` | `false` | If `true`, only run report and upload spec; do not run update or create a PR. |
+| `dry_run` | `false` | Simulate operations without making changes. |
+| `debug` | `false` | Enable Patcher debug logging. |
 
-The action supports GitHub Enterprise instances in addition to GitHub.com. You can configure the SCM provider using these inputs:
+There are additional inputs for commit author, PR title, runner, Patcher/Terrapatch versions, and pipelines-credentials/actions repos and refs; see `.github/workflows/patcher.yml` for the full list.
 
-#### GitHub Enterprise Example
+## Outputs
 
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: gruntwork-io/patcher-action@v2
-    with:
-      github_base_url: "https://github.company.com"
-      github_org: "my-org"
-      patcher_git_repo: "my-patcher-cli"
-      terrapatch_git_repo: "my-terrapatch-cli"
-      PATCHER_READ_TOKEN: ${{ secrets.PATCHER_READ_TOKEN }}
-```
+- **`spec`** — The upgrade specification JSON produced by `patcher report` (multiline string).
 
-### Promotion Workflows
+## Example workflows
 
-Refer to the [Promotion Workflows with Terraform](https://blog.gruntwork.io/promotion-workflows-with-terraform-13c05bed953d).
+Copy and adapt the workflows under **`examples/github/workflows/`** into your repo’s `.github/workflows/`:
 
-## Developer Setup
-
-If you need to make changes to the action, you can build it locally with the following commands:
-
-```sh
-# install dependencies
-yarn
-
-# run the tests
-yarn test
-
-# build a release
-yarn build
-```
+| File | Purpose |
+|------|---------|
+| **`update-dev.yml`** | Update dev dependencies: manual, schedule (e.g. weekly), or `repository_dispatch`; uses `include_dirs: "{*dev*}/**"`. Can trigger the next env when a PR with label `updates-dev` is merged. |
+| **`update-stage.yml`** | Same pattern for stage; `include_dirs: "{*stage*}/**"`; triggered by `dev_updates_merged`. |
+| **`update-prod.yml`** | Same for prod; `include_dirs: "{*prod*}/**"`; triggered by `stage_updates_merged`. |
+| **`patcher.yml`** | Manual-only (“Run workflow”) with inputs for `include_dirs`, `exclude_dirs`, `update_strategy`, `dry_run`, `skip_update`, etc., for ad‑hoc and testing. |
+| **`patcher-readme-check.yml`** | Fails the PR if any `README-TO-COMPLETE-UPDATE.md` remain. |
+| **`label.yml`** | Labels PRs by changed folders (e.g. `updates-dev`, `updates-stage`). |

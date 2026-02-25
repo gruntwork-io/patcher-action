@@ -1,0 +1,312 @@
+name: Patcher Update Dependencies
+
+on:
+  workflow_call:
+    secrets:
+      PIPELINES_READ_TOKEN:
+        required: true
+        description: "Token used to download Patcher binaries from Gruntwork repositories and read dependency info from Gruntwork module repositories. Needs read access to gruntwork-io repos and your infrastructure repos."
+      PR_CREATE_TOKEN:
+        required: true
+        description: "Token used to push changes and create Pull Requests. Needs write access to your infrastructure repository."
+    inputs:
+      runner:
+        description: 'Runner label(s) for workflow jobs, as escaped JSON. Examples: "\"ubuntu-latest\"" or "[\"self-hosted\",\"linux\"]".'
+        type: string
+        default: '"ubuntu-latest"'
+      patcher_version:
+        description: "Version of Patcher to download and use."
+        type: string
+        default: "v0.17.3"
+      terrapatch_version:
+        description: "Version of terrapatch to download and use."
+        type: string
+        default: "v0.2.2"
+      working_dir:
+        description: "Directory within the repository where Patcher should run. Relative to the repository root."
+        type: string
+        default: "./"
+      include_dirs:
+        description: 'Include only directories matching this double-star glob pattern (report only). Example: "{*dev*}/**"'
+        type: string
+        default: ""
+      exclude_dirs:
+        description: 'Exclude directories matching this double-star glob pattern (report only). Example: "{*alb*}/**"'
+        type: string
+        default: ""
+      update_strategy:
+        description: "Update strategy passed to patcher update. Defaults to 'next-breaking'."
+        type: string
+        default: "next-breaking"
+      spec_file:
+        description: "Filename for the upgrade specification. Relative to the repository root."
+        type: string
+        default: "spec.json"
+      dependency:
+        description: "Limit the update to a single dependency (--spec-target). Format: <org>/<repo>/<name>. If unset, all dependencies from the report are updated in one run."
+        type: string
+        default: ""
+      pull_request_branch:
+        description: "Branch for Pull Requests. Defaults to 'patcher-updates' (or 'patcher-updates-<dependency-ID>' when dependency is set)."
+        type: string
+        default: ""
+      pull_request_title:
+        description: "Title of the Pull Request."
+        type: string
+        default: "[Patcher] Update dependencies"
+      commit_author_name:
+        description: "Name of the commit author."
+        type: string
+        default: "gruntwork-patcher-bot"
+      commit_author_email:
+        description: "Email of the commit author."
+        type: string
+        default: "patcher@gruntwork.io"
+      dry_run:
+        description: "Simulate all operations without making real changes. Useful for test workflows."
+        type: boolean
+        default: false
+      no_color:
+        description: "Disable color output from Patcher."
+        type: boolean
+        default: false
+      debug:
+        description: "Enable debug logging (sets PATCHER_LOG_LEVEL=debug and PATCHER_DEBUG=1)."
+        type: boolean
+        default: false
+      skip_update:
+        description: "If true, only run the report and skip the update step. Useful for auditing."
+        type: boolean
+        default: false
+      api_base_url:
+        description: "Base URL for the Gruntwork API."
+        type: string
+        default: "https://api.prod.app.gruntwork.io/api/v1"
+      pipelines_credentials_repo:
+        description: "Repository for the pipelines-credentials action."
+        type: string
+        default: "gruntwork-io/pipelines-credentials"
+      pipelines_credentials_ref:
+        description: "Ref (tag or branch) for the pipelines-credentials action."
+        type: string
+        default: "v1.2.0"
+      pipelines_actions_repo:
+        description: "Repository for pipelines-actions (used for Configure code auth)."
+        type: string
+        default: "gruntwork-io/pipelines-actions"
+      pipelines_actions_ref:
+        description: "Ref (tag or branch) for pipelines-actions."
+        type: string
+        default: "v4.3.0"
+    outputs:
+      spec:
+        description: "Upgrade specification JSON produced by patcher report."
+        value: ${{ jobs.patcher.outputs.spec }}
+
+jobs:
+  patcher:
+    name: Patcher Report and Update
+    runs-on: ${{ fromJson(inputs.runner) }}
+    permissions:
+      id-token: write
+      contents: write
+    outputs:
+      spec: ${{ steps.run-report.outputs.spec }}
+      has_dependencies: ${{ steps.run-report.outputs.has_dependencies }}
+    steps:
+      - name: Checkout pipelines-credentials
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.pipelines_credentials_repo }}
+          ref: ${{ inputs.pipelines_credentials_ref }}
+          token: ${{ secrets.PIPELINES_READ_TOKEN }}
+          path: .pipelines-credentials
+
+      - name: Fetch Gruntwork Read Token
+        id: gruntwork-read-token
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "pipelines-read/gruntwork-io"
+          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+          api_base_url: ${{ inputs.api_base_url }}
+
+      - name: Fetch Org Read Token
+        id: org-read-token
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "pipelines-read/${{ github.repository_owner }}"
+          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+          api_base_url: ${{ inputs.api_base_url }}
+
+      - name: Fetch PR Create Token
+        id: pr-create-token
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "propose-infra-change/${{ github.repository_owner }}"
+          FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
+          api_base_url: ${{ inputs.api_base_url }}
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          path: infra-live-repo
+          fetch-depth: 0
+          token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
+
+      - name: Checkout Pipelines Actions
+        id: checkout-actions
+        uses: actions/checkout@v4
+        with:
+          path: pipelines-actions
+          repository: ${{ inputs.pipelines_actions_repo }}
+          ref: ${{ inputs.pipelines_actions_ref }}
+          token: ${{ inputs.pipelines_actions_repo == 'gruntwork-io/pipelines-actions' && steps.gruntwork-read-token.outputs.PIPELINES_TOKEN || steps.org-read-token.outputs.PIPELINES_TOKEN }}
+
+      - name: Configure code auth
+        uses: ./pipelines-actions/.github/actions/pipelines-code-auth
+        with:
+          PIPELINES_GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          PIPELINES_CUSTOMER_ORG_READ_TOKEN: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
+
+      - name: Install Patcher and Terrapatch
+        env:
+          GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          PATCHER_VERSION: ${{ inputs.patcher_version }}
+          TERRAPATCH_VERSION: ${{ inputs.terrapatch_version }}
+        run: |
+          PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+
+          mkdir -p /tmp/patcher-install
+          GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$PATCHER_VERSION" \
+            --repo gruntwork-io/patcher-cli \
+            --pattern "patcher_${PLATFORM}_${ARCH}*" \
+            --dir /tmp/patcher-install
+          mv /tmp/patcher-install/patcher_* /tmp/patcher-install/patcher
+          chmod +x /tmp/patcher-install/patcher
+          echo "/tmp/patcher-install" >> "$GITHUB_PATH"
+
+          mkdir -p /tmp/terrapatch-install
+          GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$TERRAPATCH_VERSION" \
+            --repo gruntwork-io/terrapatch-cli \
+            --pattern "terrapatch_${PLATFORM}_${ARCH}*" \
+            --dir /tmp/terrapatch-install
+          mv /tmp/terrapatch-install/terrapatch_* /tmp/terrapatch-install/terrapatch
+          chmod +x /tmp/terrapatch-install/terrapatch
+          echo "/tmp/terrapatch-install" >> "$GITHUB_PATH"
+
+      - name: Run patcher report
+        id: run-report
+        env:
+          GITHUB_OAUTH_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          GIT_AUTHOR_NAME: ${{ inputs.commit_author_name }}
+          GIT_AUTHOR_EMAIL: ${{ inputs.commit_author_email }}
+          PATCHER_TELEMETRY_ID: "GHAction-${{ github.repository }}"
+          PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
+          PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
+        run: |
+          REPO_ROOT="${GITHUB_WORKSPACE}/infra-live-repo"
+          cd "$REPO_ROOT"
+
+          WORKING_DIR_ABS="$REPO_ROOT"
+          WD="${{ inputs.working_dir }}"
+          if [[ -n "$WD" && "$WD" != "." && "$WD" != "./" ]]; then
+            WORKING_DIR_ABS="${REPO_ROOT}/${WD%/}"
+          fi
+          SPEC_FILE_ABS="${REPO_ROOT}/${{ inputs.spec_file }}"
+
+          REPORT_ARGS=(report --skip-container-runtime "--output-spec=${SPEC_FILE_ABS}")
+
+          if [[ -n "${{ inputs.include_dirs }}" ]]; then
+            REPORT_ARGS+=("--include-dirs=${{ inputs.include_dirs }}")
+          fi
+
+          if [[ -n "${{ inputs.exclude_dirs }}" ]]; then
+            REPORT_ARGS+=("--exclude-dirs=${{ inputs.exclude_dirs }}")
+          fi
+
+          if [[ "${{ inputs.no_color }}" == "true" ]]; then
+            REPORT_ARGS+=(--no-color)
+          fi
+
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            REPORT_ARGS+=(--dry-run)
+          fi
+
+          REPORT_ARGS+=("${WORKING_DIR_ABS}")
+
+          patcher "${REPORT_ARGS[@]}"
+
+          {
+            echo 'spec<<PATCHER_SPEC_EOF'
+            cat "${SPEC_FILE_ABS}"
+            echo ""
+            echo 'PATCHER_SPEC_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          DEPS_COUNT=$(jq 'if .Dependencies then .Dependencies | length else 0 end' "${SPEC_FILE_ABS}")
+          if [[ "$DEPS_COUNT" -gt 0 ]]; then
+            echo "has_dependencies=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_dependencies=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload spec file
+        uses: actions/upload-artifact@v4
+        with:
+          name: patcher-spec
+          path: infra-live-repo/${{ inputs.spec_file }}
+
+      - name: Run patcher update
+        if: ${{ inputs.skip_update == false && steps.run-report.outputs.has_dependencies == 'true' }}
+        env:
+          GITHUB_OAUTH_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          GITHUB_PUBLISH_TOKEN: ${{ steps.pr-create-token.outputs.PIPELINES_TOKEN }}
+          GIT_AUTHOR_NAME: ${{ inputs.commit_author_name }}
+          GIT_AUTHOR_EMAIL: ${{ inputs.commit_author_email }}
+          PATCHER_TELEMETRY_ID: "GHAction-${{ github.repository }}"
+          PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
+          PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
+        run: |
+          REPO_ROOT="${GITHUB_WORKSPACE}/infra-live-repo"
+          cd "$REPO_ROOT"
+
+          WD="${{ inputs.working_dir }}"
+          if [[ -z "$WD" || "$WD" == "." || "$WD" == "./" ]]; then
+            PATCHER_WORKING_DIR="."
+          else
+            PATCHER_WORKING_DIR="${WD%/}"
+          fi
+          SPEC_FILE="${{ inputs.spec_file }}"
+
+          PR_BRANCH="${{ inputs.pull_request_branch }}"
+          if [[ -z "$PR_BRANCH" ]]; then
+            if [[ -n "${{ inputs.dependency }}" ]]; then
+              PR_BRANCH="patcher-updates-${{ inputs.dependency }}"
+            else
+              PR_BRANCH="patcher-updates"
+            fi
+          fi
+
+          UPDATE_ARGS=(update --non-interactive --skip-container-runtime \
+            "--update-strategy=${{ inputs.update_strategy }}" \
+            "--spec-file=${SPEC_FILE}" \
+            --publish \
+            "--pr-branch=${PR_BRANCH}" \
+            "--pr-title=${{ inputs.pull_request_title }}")
+
+          if [[ -n "${{ inputs.dependency }}" ]]; then
+            UPDATE_ARGS+=("--spec-target=${{ inputs.dependency }}")
+          fi
+
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            UPDATE_ARGS+=(--dry-run)
+          fi
+
+          if [[ "${{ inputs.no_color }}" == "true" ]]; then
+            UPDATE_ARGS+=(--no-color)
+          fi
+
+          UPDATE_ARGS+=("${PATCHER_WORKING_DIR}")
+
+          patcher "${UPDATE_ARGS[@]}"
