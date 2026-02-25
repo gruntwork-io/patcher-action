@@ -30,7 +30,7 @@ jobs:
 
   patcher:
     if: github.event_name == 'repository_dispatch' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    uses: gruntwork-io/patcher-action/.github/workflows/patcher.yml@v4
+    uses: gruntwork-io/patcher-action/.github/workflows/patcher.yml@v5
     with:
       working_dir: ./
       include_dirs: "{*dev*}/**"

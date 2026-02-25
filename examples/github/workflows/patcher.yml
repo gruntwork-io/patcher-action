@@ -52,7 +52,7 @@ permissions:
 
 jobs:
   patcher:
-    uses: gruntwork-io/patcher-action/.github/workflows/patcher.yml@v4
+    uses: gruntwork-io/patcher-action/.github/workflows/patcher.yml@v5
     with:
       include_dirs: ${{ inputs.include_dirs }}
       exclude_dirs: ${{ inputs.exclude_dirs }}
