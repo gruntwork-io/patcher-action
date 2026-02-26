@@ -115,7 +115,7 @@ jobs:
       has_dependencies: ${{ steps.run-report.outputs.has_dependencies }}
     steps:
       - name: Checkout pipelines-credentials
-        uses: actions/checkout@v4
+        uses: actions/checkout@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           repository: ${{ inputs.pipelines_credentials_repo }}
           ref: ${{ inputs.pipelines_credentials_ref }}
@@ -147,7 +147,7 @@ jobs:
           api_base_url: ${{ inputs.api_base_url }}
 
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           path: infra-live-repo
           fetch-depth: 0
@@ -155,7 +155,7 @@ jobs:
 
       - name: Checkout Pipelines Actions
         id: checkout-actions
-        uses: actions/checkout@v4
+        uses: actions/checkout@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           path: pipelines-actions
           repository: ${{ inputs.pipelines_actions_repo }}
@@ -252,7 +252,7 @@ jobs:
           fi
 
       - name: Upload spec file
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
           name: patcher-spec
           path: infra-live-repo/${{ inputs.spec_file }}
