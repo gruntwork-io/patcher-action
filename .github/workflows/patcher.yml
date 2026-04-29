@@ -4,10 +4,8 @@ on:
   workflow_call:
     secrets:
       PIPELINES_READ_TOKEN:
-        required: true
         description: "Token used to download Patcher binaries from Gruntwork repositories and read dependency info from Gruntwork module repositories. Needs read access to gruntwork-io repos and your infrastructure repos."
       PR_CREATE_TOKEN:
-        required: true
         description: "Token used to push changes and create Pull Requests. Needs write access to your infrastructure repository."
     inputs:
       runner:
@@ -114,13 +112,12 @@ jobs:
       spec: ${{ steps.run-report.outputs.spec }}
       has_dependencies: ${{ steps.run-report.outputs.has_dependencies }}
     steps:
-      - name: Checkout pipelines-credentials
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Checkout Pipelines Credentials
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
+          path: pipelines-credentials
           repository: ${{ inputs.pipelines_credentials_repo }}
           ref: ${{ inputs.pipelines_credentials_ref }}
-          token: ${{ secrets.PIPELINES_READ_TOKEN }}
-          path: .pipelines-credentials
 
       - name: Fetch Gruntwork Read Token
         id: gruntwork-read-token
