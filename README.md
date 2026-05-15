@@ -58,6 +58,7 @@ jobs:
 | `dependency` | `""` | Optional: limit update to one dependency (e.g. `gruntwork-io/terraform-aws-security/github-actions-iam-role`). |
 | `pull_request_branch` | `"patcher-updates"` | Branch name for the PR (or `patcher-updates-<dependency>` when `dependency` is set). |
 | `skip_update` | `false` | If `true`, only run report and upload spec; do not run update or create a PR. |
+| `skip_app_authentication` | `false` | If `true`, skip the Gruntwork app authentication flow (`pipelines-credentials`) and use the `PIPELINES_READ_TOKEN` / `PR_CREATE_TOKEN` secrets directly. |
 | `dry_run` | `false` | Simulate operations without making changes. |
 | `debug` | `false` | Enable Patcher debug logging. |
 

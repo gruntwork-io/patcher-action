@@ -76,6 +76,10 @@ on:
         description: "If true, only run the report and skip the update step. Useful for auditing."
         type: boolean
         default: false
+      skip_app_authentication:
+        description: "If true, skip the Gruntwork app authentication flow (pipelines-credentials) and use the provided secrets directly. Requires PIPELINES_READ_TOKEN and PR_CREATE_TOKEN to be set."
+        type: boolean
+        default: false
       api_base_url:
         description: "Base URL for the Gruntwork API."
         type: string
@@ -113,6 +117,7 @@ jobs:
       has_dependencies: ${{ steps.run-report.outputs.has_dependencies }}
     steps:
       - name: Checkout Pipelines Credentials
+        if: ${{ inputs.skip_app_authentication == false }}
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           path: pipelines-credentials
@@ -120,6 +125,7 @@ jobs:
           ref: ${{ inputs.pipelines_credentials_ref }}
 
       - name: Fetch Gruntwork Read Token
+        if: ${{ inputs.skip_app_authentication == false }}
         id: gruntwork-read-token
         uses: ./.pipelines-credentials
         with:
@@ -128,6 +134,7 @@ jobs:
           api_base_url: ${{ inputs.api_base_url }}
 
       - name: Fetch Org Read Token
+        if: ${{ inputs.skip_app_authentication == false }}
         id: org-read-token
         uses: ./.pipelines-credentials
         with:
@@ -136,6 +143,7 @@ jobs:
           api_base_url: ${{ inputs.api_base_url }}
 
       - name: Fetch PR Create Token
+        if: ${{ inputs.skip_app_authentication == false }}
         id: pr-create-token
         uses: ./.pipelines-credentials
         with:
@@ -143,12 +151,38 @@ jobs:
           FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
           api_base_url: ${{ inputs.api_base_url }}
 
+      - name: Resolve tokens
+        id: tokens
+        env:
+          SKIP_APP_AUTH: ${{ inputs.skip_app_authentication }}
+          GRUNTWORK_READ: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          ORG_READ: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
+          PR_CREATE: ${{ steps.pr-create-token.outputs.PIPELINES_TOKEN }}
+          PIPELINES_READ_SECRET: ${{ secrets.PIPELINES_READ_TOKEN }}
+          PR_CREATE_SECRET: ${{ secrets.PR_CREATE_TOKEN }}
+        run: |
+          if [[ "$SKIP_APP_AUTH" == "true" ]]; then
+            GRUNTWORK_READ_TOKEN="$PIPELINES_READ_SECRET"
+            ORG_READ_TOKEN="$PIPELINES_READ_SECRET"
+            PR_CREATE_TOKEN_VAL="$PR_CREATE_SECRET"
+          else
+            GRUNTWORK_READ_TOKEN="$GRUNTWORK_READ"
+            ORG_READ_TOKEN="$ORG_READ"
+            PR_CREATE_TOKEN_VAL="$PR_CREATE"
+          fi
+          echo "::add-mask::$GRUNTWORK_READ_TOKEN"
+          echo "::add-mask::$ORG_READ_TOKEN"
+          echo "::add-mask::$PR_CREATE_TOKEN_VAL"
+          echo "gruntwork_read_token=$GRUNTWORK_READ_TOKEN" >> "$GITHUB_OUTPUT"
+          echo "org_read_token=$ORG_READ_TOKEN" >> "$GITHUB_OUTPUT"
+          echo "pr_create_token=$PR_CREATE_TOKEN_VAL" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repo
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           path: infra-live-repo
           fetch-depth: 0
-          token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
+          token: ${{ steps.tokens.outputs.org_read_token }}
 
       - name: Checkout Pipelines Actions
         id: checkout-actions
@@ -157,17 +191,17 @@ jobs:
           path: pipelines-actions
           repository: ${{ inputs.pipelines_actions_repo }}
           ref: ${{ inputs.pipelines_actions_ref }}
-          token: ${{ inputs.pipelines_actions_repo == 'gruntwork-io/pipelines-actions' && steps.gruntwork-read-token.outputs.PIPELINES_TOKEN || steps.org-read-token.outputs.PIPELINES_TOKEN }}
+          token: ${{ inputs.pipelines_actions_repo == 'gruntwork-io/pipelines-actions' && steps.tokens.outputs.gruntwork_read_token || steps.tokens.outputs.org_read_token }}
 
       - name: Configure code auth
         uses: ./pipelines-actions/.github/actions/pipelines-code-auth
         with:
-          PIPELINES_GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
-          PIPELINES_CUSTOMER_ORG_READ_TOKEN: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
+          PIPELINES_GRUNTWORK_READ_TOKEN: ${{ steps.tokens.outputs.gruntwork_read_token }}
+          PIPELINES_CUSTOMER_ORG_READ_TOKEN: ${{ steps.tokens.outputs.org_read_token }}
 
       - name: Install Patcher and Terrapatch
         env:
-          GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          GRUNTWORK_READ_TOKEN: ${{ steps.tokens.outputs.gruntwork_read_token }}
           PATCHER_VERSION: ${{ inputs.patcher_version }}
           TERRAPATCH_VERSION: ${{ inputs.terrapatch_version }}
         run: |
@@ -195,7 +229,7 @@ jobs:
       - name: Run patcher report
         id: run-report
         env:
-          GITHUB_OAUTH_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          GITHUB_OAUTH_TOKEN: ${{ steps.tokens.outputs.gruntwork_read_token }}
           GIT_AUTHOR_NAME: ${{ inputs.commit_author_name }}
           GIT_AUTHOR_EMAIL: ${{ inputs.commit_author_email }}
           PATCHER_TELEMETRY_ID: "GHAction-${{ github.repository }}"
@@ -257,8 +291,8 @@ jobs:
       - name: Run patcher update
         if: ${{ inputs.skip_update == false && steps.run-report.outputs.has_dependencies == 'true' }}
         env:
-          GITHUB_OAUTH_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
-          GITHUB_PUBLISH_TOKEN: ${{ steps.pr-create-token.outputs.PIPELINES_TOKEN }}
+          GITHUB_OAUTH_TOKEN: ${{ steps.tokens.outputs.gruntwork_read_token }}
+          GITHUB_PUBLISH_TOKEN: ${{ steps.tokens.outputs.pr_create_token }}
           GIT_AUTHOR_NAME: ${{ inputs.commit_author_name }}
           GIT_AUTHOR_EMAIL: ${{ inputs.commit_author_email }}
           PATCHER_TELEMETRY_ID: "GHAction-${{ github.repository }}"
