@@ -115,7 +115,7 @@ jobs:
       - name: Checkout Pipelines Credentials
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          path: pipelines-credentials
+          path: ./.pipelines-credentials
           repository: ${{ inputs.pipelines_credentials_repo }}
           ref: ${{ inputs.pipelines_credentials_ref }}
 
