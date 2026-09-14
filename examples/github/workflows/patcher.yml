@@ -25,6 +25,16 @@ on:
         required: false
         default: 'next-breaking'
         type: string
+      update_by_account:
+        description: 'Open one PR per account (top-level directory)'
+        required: false
+        default: false
+        type: boolean
+      update_by_dependency:
+        description: 'Open one PR per dependency'
+        required: false
+        default: false
+        type: boolean
       pull_request_branch:
         description: 'Branch for PRs (default: patcher-updates or patcher-updates-<dependency>)'
         required: false
@@ -58,6 +68,8 @@ jobs:
       exclude_dirs: ${{ inputs.exclude_dirs }}
       working_dir: ./
       update_strategy: ${{ inputs.update_strategy }}
+      update_by_account: ${{ inputs.update_by_account }}
+      update_by_dependency: ${{ inputs.update_by_dependency }}
       pull_request_branch: ${{ inputs.pull_request_branch }}
       dry_run: ${{ inputs.dry_run }}
       debug: ${{ inputs.debug }}

@@ -41,9 +41,17 @@ on:
         type: string
         default: "spec.json"
       dependency:
-        description: "Limit the update to a single dependency (--spec-target). Format: <org>/<repo>/<name>. If unset, all dependencies from the report are updated in one run."
+        description: "Limit the update to a single dependency (--spec-target). Format: <org>/<repo>/<name>. If unset, all dependencies from the report are updated in one run. When update_by_dependency is true, this filters the matrix down to just this dependency."
         type: string
         default: ""
+      update_by_account:
+        description: "If true, open one Pull Request per account instead of a single PR. Accounts are the top-level directories under working_dir that contain Terragrunt/Terraform files. Can be combined with update_by_dependency."
+        type: boolean
+        default: false
+      update_by_dependency:
+        description: "If true, open one Pull Request per dependency instead of a single PR. Can be combined with update_by_account to get one PR per account-dependency pair."
+        type: boolean
+        default: false
       pull_request_branch:
         description: "Branch for Pull Requests. Defaults to 'patcher-updates' (or 'patcher-updates-<dependency-ID>' when dependency is set)."
         type: string
@@ -107,7 +115,7 @@ on:
 
 jobs:
   patcher:
-    name: Patcher Report and Update
+    name: Patcher Report
     runs-on: ${{ fromJson(inputs.runner) }}
     permissions:
       id-token: write
@@ -115,6 +123,8 @@ jobs:
     outputs:
       spec: ${{ steps.run-report.outputs.spec }}
       has_dependencies: ${{ steps.run-report.outputs.has_dependencies }}
+      update_matrix: ${{ steps.compute-matrix.outputs.update_matrix }}
+      has_update_targets: ${{ steps.compute-matrix.outputs.has_update_targets }}
     steps:
       - name: Checkout Pipelines Credentials
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -215,8 +225,15 @@ jobs:
             WORKING_DIR_ABS="${REPO_ROOT}/${WD%/}"
           fi
           SPEC_FILE_ABS="${REPO_ROOT}/${{ inputs.spec_file }}"
+          PLAN_FILE_ABS="${RUNNER_TEMP}/patcher-plan.json"
 
-          REPORT_ARGS=(report --skip-container-runtime "--output-spec=${SPEC_FILE_ABS}")
+          {
+            echo "WORKING_DIR_ABS=${WORKING_DIR_ABS}"
+            echo "PLAN_FILE_ABS=${PLAN_FILE_ABS}"
+            echo "SPEC_FILE_ABS=${SPEC_FILE_ABS}"
+          } >> "$GITHUB_ENV"
+
+          REPORT_ARGS=(report --skip-container-runtime "--output-spec=${SPEC_FILE_ABS}" "--output-plan=${PLAN_FILE_ABS}")
 
           if [[ -n "${{ inputs.include_dirs }}" ]]; then
             REPORT_ARGS+=("--include-dirs=${{ inputs.include_dirs }}")
@@ -258,8 +275,194 @@ jobs:
           name: patcher-spec
           path: infra-live-repo/${{ inputs.spec_file }}
 
+      - name: Compute update matrix
+        id: compute-matrix
+        env:
+          BY_ACCOUNT: ${{ inputs.update_by_account }}
+          BY_DEPENDENCY: ${{ inputs.update_by_dependency }}
+          DEP_FILTER: ${{ inputs.dependency }}
+        run: |
+          # Flatten the upgrade plan into one {dep, dir, account} record per usage.
+          # Dirs are relative to the working dir; the account is the first path component.
+          if [[ -s "$PLAN_FILE_ABS" ]]; then
+            USAGES=$(jq -c --arg wd "$WORKING_DIR_ABS" '
+              [ .Dependencies[]?
+                | (.Org + "/" + .Repo + "/" + .Module) as $dep
+                | .Usages[]?
+                | (.Source.File | ltrimstr($wd) | ltrimstr("/") | split("/")[:-1] | join("/")) as $dir
+                | select($dir != "")
+                | {dep: $dep, dir: $dir, account: ($dir | split("/")[0])}
+              ] | unique' "$PLAN_FILE_ABS")
+          else
+            USAGES='[]'
+          fi
+
+          DEPS_COUNT=$(jq 'if .Dependencies then .Dependencies | length else 0 end' "${SPEC_FILE_ABS}")
+
+          MATRIX=$(jq -cn \
+            --argjson usages "$USAGES" \
+            --argjson deps_count "$DEPS_COUNT" \
+            --arg by_account "$BY_ACCOUNT" \
+            --arg by_dependency "$BY_DEPENDENCY" \
+            --arg dep_filter "$DEP_FILTER" '
+            def dirs_pattern: "{" + (map(.dir) | unique | join(",")) + "}/**";
+            def dep_slug: gsub("/"; "-");
+
+            ($usages | if $dep_filter != "" then map(select(.dep == $dep_filter)) else . end) as $u
+            | (if $by_account == "true" and $by_dependency == "true" then
+                $u | group_by([.account, .dep]) | map({
+                  name: (.[0].account + " | " + .[0].dep),
+                  account: .[0].account,
+                  spec_target: .[0].dep,
+                  include_pattern: dirs_pattern,
+                  branch_suffix: ("-" + .[0].account + "-" + (.[0].dep | dep_slug)),
+                  title_suffix: (" (" + .[0].account + " - " + .[0].dep + ")")
+                })
+              elif $by_account == "true" then
+                $u | group_by(.account) | map({
+                  name: .[0].account,
+                  account: .[0].account,
+                  spec_target: $dep_filter,
+                  include_pattern: dirs_pattern,
+                  branch_suffix: ("-" + .[0].account + (if $dep_filter != "" then "-" + ($dep_filter | dep_slug) else "" end)),
+                  title_suffix: (" (" + .[0].account + (if $dep_filter != "" then " - " + $dep_filter else "" end) + ")")
+                })
+              elif $by_dependency == "true" then
+                $u | group_by(.dep) | map({
+                  name: .[0].dep,
+                  account: "",
+                  spec_target: .[0].dep,
+                  include_pattern: "",
+                  branch_suffix: ("-" + (.[0].dep | dep_slug)),
+                  title_suffix: (" (" + .[0].dep + ")")
+                })
+              else
+                (if $deps_count > 0 then
+                  [{name: "all", account: "", spec_target: $dep_filter, include_pattern: "", branch_suffix: "", title_suffix: ""}]
+                else [] end)
+              end)')
+
+          COUNT=$(jq 'length' <<< "$MATRIX")
+          if [[ "$COUNT" -gt 0 ]]; then
+            echo "has_update_targets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_update_targets=false" >> "$GITHUB_OUTPUT"
+            # Placeholder so fromJson() on the matrix never sees an empty array;
+            # the update job is skipped via has_update_targets.
+            MATRIX='[{"name":"noop","account":"","spec_target":"","include_pattern":"","branch_suffix":"","title_suffix":""}]'
+          fi
+
+          echo "Update matrix (${COUNT} entries):"
+          jq . <<< "$MATRIX"
+          echo "update_matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+
+  patcher-update:
+    name: "Patcher Update: ${{ matrix.name }}"
+    needs: patcher
+    if: ${{ inputs.skip_update == false && needs.patcher.outputs.has_update_targets == 'true' }}
+    runs-on: ${{ fromJson(inputs.runner) }}
+    permissions:
+      id-token: write
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.patcher.outputs.update_matrix) }}
+    steps:
+      - name: Checkout Pipelines Credentials
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          path: ./.pipelines-credentials
+          repository: ${{ inputs.pipelines_credentials_repo }}
+          ref: ${{ inputs.pipelines_credentials_ref }}
+
+      - name: Fetch Gruntwork Read Token
+        id: gruntwork-read-token
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "pipelines-read/gruntwork-io"
+          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+          api_base_url: ${{ inputs.api_base_url }}
+
+      - name: Fetch Org Read Token
+        id: org-read-token
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "pipelines-read/${{ github.repository_owner }}"
+          FALLBACK_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
+          api_base_url: ${{ inputs.api_base_url }}
+
+      - name: Fetch PR Create Token
+        id: pr-create-token
+        uses: ./.pipelines-credentials
+        with:
+          PIPELINES_TOKEN_PATH: "propose-infra-change/${{ github.repository_owner }}"
+          FALLBACK_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
+          api_base_url: ${{ inputs.api_base_url }}
+
+      - name: Checkout repo
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          path: infra-live-repo
+          fetch-depth: 0
+          token: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
+
+      - name: Checkout Pipelines Actions
+        id: checkout-actions
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          path: pipelines-actions
+          repository: ${{ inputs.pipelines_actions_repo }}
+          ref: ${{ inputs.pipelines_actions_ref }}
+          token: ${{ inputs.pipelines_actions_repo == 'gruntwork-io/pipelines-actions' && steps.gruntwork-read-token.outputs.PIPELINES_TOKEN || steps.org-read-token.outputs.PIPELINES_TOKEN }}
+
+      - name: Configure code auth
+        uses: ./pipelines-actions/.github/actions/pipelines-code-auth
+        with:
+          PIPELINES_GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          PIPELINES_CUSTOMER_ORG_READ_TOKEN: ${{ steps.org-read-token.outputs.PIPELINES_TOKEN }}
+
+      - name: Install Patcher and Terrapatch
+        env:
+          GRUNTWORK_READ_TOKEN: ${{ steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
+          PATCHER_VERSION: ${{ inputs.patcher_version }}
+          TERRAPATCH_VERSION: ${{ inputs.terrapatch_version }}
+        run: |
+          PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+
+          mkdir -p /tmp/patcher-install
+          GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$PATCHER_VERSION" \
+            --repo gruntwork-io/patcher-cli \
+            --pattern "patcher_${PLATFORM}_${ARCH}*" \
+            --dir /tmp/patcher-install
+          mv /tmp/patcher-install/patcher_* /tmp/patcher-install/patcher
+          chmod +x /tmp/patcher-install/patcher
+          echo "/tmp/patcher-install" >> "$GITHUB_PATH"
+
+          mkdir -p /tmp/terrapatch-install
+          GH_TOKEN="$GRUNTWORK_READ_TOKEN" gh release download "$TERRAPATCH_VERSION" \
+            --repo gruntwork-io/terrapatch-cli \
+            --pattern "terrapatch_${PLATFORM}_${ARCH}*" \
+            --dir /tmp/terrapatch-install
+          mv /tmp/terrapatch-install/terrapatch_* /tmp/terrapatch-install/terrapatch
+          chmod +x /tmp/terrapatch-install/terrapatch
+          echo "/tmp/terrapatch-install" >> "$GITHUB_PATH"
+
+      - name: Write spec file
+        env:
+          SPEC_JSON: ${{ needs.patcher.outputs.spec }}
+          INCLUDE_PATTERN: ${{ matrix.include_pattern }}
+        run: |
+          SPEC_FILE_ABS="${GITHUB_WORKSPACE}/infra-live-repo/${{ inputs.spec_file }}"
+          if [[ -n "$INCLUDE_PATTERN" ]]; then
+            # Narrow the spec to the directories for this matrix entry.
+            printf '%s' "$SPEC_JSON" | jq --arg p "$INCLUDE_PATTERN" '.IncludeDirPattern = $p' > "$SPEC_FILE_ABS"
+          else
+            printf '%s' "$SPEC_JSON" > "$SPEC_FILE_ABS"
+          fi
+
       - name: Run patcher update
-        if: ${{ inputs.skip_update == false && steps.run-report.outputs.has_dependencies == 'true' }}
         env:
           GITHUB_OAUTH_TOKEN: ${{ inputs.use_customer_token_for_modules == false && steps.gruntwork-read-token.outputs.PIPELINES_TOKEN || steps.org-read-token.outputs.PIPELINES_TOKEN }}
           GITHUB_PUBLISH_TOKEN: ${{ steps.pr-create-token.outputs.PIPELINES_TOKEN }}
@@ -268,6 +471,9 @@ jobs:
           PATCHER_TELEMETRY_ID: "GHAction-${{ github.repository }}"
           PATCHER_LOG_LEVEL: ${{ inputs.debug == true && 'debug' || '' }}
           PATCHER_DEBUG: ${{ inputs.debug == true && '1' || '' }}
+          SPEC_TARGET: ${{ matrix.spec_target }}
+          BRANCH_SUFFIX: ${{ matrix.branch_suffix }}
+          TITLE_SUFFIX: ${{ matrix.title_suffix }}
         run: |
           REPO_ROOT="${GITHUB_WORKSPACE}/infra-live-repo"
           cd "$REPO_ROOT"
@@ -282,22 +488,23 @@ jobs:
 
           PR_BRANCH="${{ inputs.pull_request_branch }}"
           if [[ -z "$PR_BRANCH" ]]; then
-            if [[ -n "${{ inputs.dependency }}" ]]; then
+            if [[ -n "${{ inputs.dependency }}" && -z "$BRANCH_SUFFIX" ]]; then
               PR_BRANCH="patcher-updates-${{ inputs.dependency }}"
             else
               PR_BRANCH="patcher-updates"
             fi
           fi
+          PR_BRANCH="${PR_BRANCH}${BRANCH_SUFFIX}"
 
           UPDATE_ARGS=(update --non-interactive --skip-container-runtime \
             "--update-strategy=${{ inputs.update_strategy }}" \
             "--spec-file=${SPEC_FILE}" \
             --publish \
             "--pr-branch=${PR_BRANCH}" \
-            "--pr-title=${{ inputs.pull_request_title }}")
+            "--pr-title=${{ inputs.pull_request_title }}${TITLE_SUFFIX}")
 
-          if [[ -n "${{ inputs.dependency }}" ]]; then
-            UPDATE_ARGS+=("--spec-target=${{ inputs.dependency }}")
+          if [[ -n "$SPEC_TARGET" ]]; then
+            UPDATE_ARGS+=("--spec-target=${SPEC_TARGET}")
           fi
 
           if [[ "${{ inputs.dry_run }}" == "true" ]]; then
