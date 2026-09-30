@@ -104,6 +104,8 @@ on:
         description: "Ref (tag or branch) for pipelines-actions."
         type: string
         default: "v4.3.0"
+      # String-typed, so compare against both true and 'true': in expressions
+      # 'false' == false is false (NaN vs 0), which made the default pick the org token.
       use_customer_token_for_modules:
         description: "forces use of customer org token for modules"
         type: string
@@ -209,7 +211,7 @@ jobs:
       - name: Run patcher report
         id: run-report
         env:
-          GITHUB_OAUTH_TOKEN: ${{ inputs.use_customer_token_for_modules == false && steps.gruntwork-read-token.outputs.PIPELINES_TOKEN || steps.org-read-token.outputs.PIPELINES_TOKEN }}
+          GITHUB_OAUTH_TOKEN: ${{ (inputs.use_customer_token_for_modules == true || inputs.use_customer_token_for_modules == 'true') && steps.org-read-token.outputs.PIPELINES_TOKEN || steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
           GIT_AUTHOR_NAME: ${{ inputs.commit_author_name }}
           GIT_AUTHOR_EMAIL: ${{ inputs.commit_author_email }}
           PATCHER_TELEMETRY_ID: "GHAction-${{ github.repository }}"
@@ -464,7 +466,7 @@ jobs:
 
       - name: Run patcher update
         env:
-          GITHUB_OAUTH_TOKEN: ${{ inputs.use_customer_token_for_modules == false && steps.gruntwork-read-token.outputs.PIPELINES_TOKEN || steps.org-read-token.outputs.PIPELINES_TOKEN }}
+          GITHUB_OAUTH_TOKEN: ${{ (inputs.use_customer_token_for_modules == true || inputs.use_customer_token_for_modules == 'true') && steps.org-read-token.outputs.PIPELINES_TOKEN || steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
           GITHUB_PUBLISH_TOKEN: ${{ steps.pr-create-token.outputs.PIPELINES_TOKEN }}
           GIT_AUTHOR_NAME: ${{ inputs.commit_author_name }}
           GIT_AUTHOR_EMAIL: ${{ inputs.commit_author_email }}
