@@ -29,6 +29,19 @@ By default everything that matched the report goes into **one PR**. Two booleans
 
 Each PR gets a unique branch (`<pull_request_branch>-<account>`, `<pull_request_branch>-<org>-<repo>-<module>`, or both) and the account/dependency is appended to the PR title. Pairs with no usages are skipped, so no empty PRs are created. `include_dirs`/`exclude_dirs` are respected: the matrix is derived from the filtered report.
 
+## Promoting updates between environments
+
+In a dev → stage → prod promotion flow (see `update-dev.yml`, `update-stage.yml`, `update-prod.yml` under `examples/`), merging a PR in one environment dispatches an event that runs Patcher on the next. By default that run updates **every** outdated dependency in the next environment. To promote only the dependency the merged PR updated, pass the merged PR's branch from the dispatch payload:
+
+```yaml
+    with:
+      include_dirs: "{*stage*}/**"
+      update_by_dependency: true
+      promotion_source_branch: ${{ github.event.client_payload.branch }}
+```
+
+The source PR must come from a run with `update_by_dependency: true` so its branch names the dependency. If no dependency in this environment matches the branch (e.g. the next environment doesn't use that module, or the merged PR wasn't a per-dependency Patcher PR), no PRs are opened. Scheduled and manual runs have no payload, so they update everything as usual.
+
 
 ## Requirements
 
@@ -73,6 +86,7 @@ jobs:
 | `dependency` | `""` | Optional: limit update to one dependency (e.g. `gruntwork-io/terraform-aws-security/github-actions-iam-role`). |
 | `update_by_account` | `false` | Open one PR per account (top-level directory under `working_dir`). |
 | `update_by_dependency` | `false` | Open one PR per dependency. Combine with `update_by_account` for one PR per account-dependency pair. |
+| `promotion_source_branch` | `""` | Head branch of the merged PR from the previous environment. When set, only the dependency that PR updated is updated. See [Promoting updates between environments](#promoting-updates-between-environments). |
 | `pull_request_branch` | `"patcher-updates"` | Base branch name for PRs. Split modes append `-<account>` and/or `-<org>-<repo>-<module>`. |
 | `skip_update` | `false` | If `true`, only run report and upload spec; do not run update or create a PR. |
 | `dry_run` | `false` | Simulate operations without making changes. |

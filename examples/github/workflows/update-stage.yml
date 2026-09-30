@@ -32,6 +32,9 @@ jobs:
     with:
       working_dir: ./
       include_dirs: "{*stage*}/**"
+      # Only promote the dependency updated by the merged PR that triggered this run.
+      # Empty for schedule/workflow_dispatch runs, which update everything.
+      promotion_source_branch: ${{ github.event.client_payload.branch }}
     secrets:
       PIPELINES_READ_TOKEN: ${{ secrets.PIPELINES_READ_TOKEN }}
       PR_CREATE_TOKEN: ${{ secrets.PR_CREATE_TOKEN }}
