@@ -52,6 +52,10 @@ on:
         description: "If true, open one Pull Request per dependency instead of a single PR. Can be combined with update_by_account to get one PR per account-dependency pair."
         type: boolean
         default: false
+      promotion_source_branch:
+        description: "For promotion workflows: head branch of the merged Patcher PR from the previous environment (e.g. github.event.client_payload.branch). When set, only the dependency that PR updated is updated here; if no dependency in this environment's report matches the branch, no PRs are opened."
+        type: string
+        default: ""
       pull_request_branch:
         description: "Branch for Pull Requests. Defaults to 'patcher-updates' (or 'patcher-updates-<dependency-ID>' when dependency is set)."
         type: string
@@ -104,6 +108,8 @@ on:
         description: "Ref (tag or branch) for pipelines-actions."
         type: string
         default: "v4.3.0"
+      # String-typed, so compare against both true and 'true': in expressions
+      # 'false' == false is false (NaN vs 0), which made the default pick the org token.
       use_customer_token_for_modules:
         description: "forces use of customer org token for modules"
         type: string
@@ -209,7 +215,7 @@ jobs:
       - name: Run patcher report
         id: run-report
         env:
-          GITHUB_OAUTH_TOKEN: ${{ inputs.use_customer_token_for_modules == false && steps.gruntwork-read-token.outputs.PIPELINES_TOKEN || steps.org-read-token.outputs.PIPELINES_TOKEN }}
+          GITHUB_OAUTH_TOKEN: ${{ (inputs.use_customer_token_for_modules == true || inputs.use_customer_token_for_modules == 'true') && steps.org-read-token.outputs.PIPELINES_TOKEN || steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
           GIT_AUTHOR_NAME: ${{ inputs.commit_author_name }}
           GIT_AUTHOR_EMAIL: ${{ inputs.commit_author_email }}
           PATCHER_TELEMETRY_ID: "GHAction-${{ github.repository }}"
@@ -281,6 +287,7 @@ jobs:
           BY_ACCOUNT: ${{ inputs.update_by_account }}
           BY_DEPENDENCY: ${{ inputs.update_by_dependency }}
           DEP_FILTER: ${{ inputs.dependency }}
+          PROMOTION_SOURCE_BRANCH: ${{ inputs.promotion_source_branch }}
         run: |
           # Flatten the upgrade plan into one {dep, dir, account} record per usage.
           # Dirs are relative to the working dir; the account is the first path component.
@@ -298,6 +305,26 @@ jobs:
           fi
 
           DEPS_COUNT=$(jq 'if .Dependencies then .Dependencies | length else 0 end' "${SPEC_FILE_ABS}")
+
+          # Promotion: narrow to the dependency the upstream PR updated. Split-mode
+          # branches end in "-<org>-<repo>-<module>" with "/" replaced by "-", which
+          # can't be reversed, so match each known dependency's slug against the
+          # branch and keep the longest (most specific) match.
+          if [[ -n "$PROMOTION_SOURCE_BRANCH" ]]; then
+            PROMOTED_DEP=$(jq -r --arg branch "$PROMOTION_SOURCE_BRANCH" --arg dep_filter "$DEP_FILTER" '
+              ("-" + ($branch | gsub("/"; "-"))) as $b
+              | [ .[].dep | select($dep_filter == "" or . == $dep_filter) ] | unique
+              | map(select(. as $d | $b | endswith("-" + ($d | gsub("/"; "-")))))
+              | max_by(length) // empty' <<< "$USAGES")
+            if [[ -n "$PROMOTED_DEP" ]]; then
+              echo "Promoting ${PROMOTED_DEP} (from branch ${PROMOTION_SOURCE_BRANCH})"
+              DEP_FILTER="$PROMOTED_DEP"
+            else
+              echo "::notice::No dependency in this environment matches promotion source branch '${PROMOTION_SOURCE_BRANCH}'; nothing to promote."
+              USAGES='[]'
+              DEPS_COUNT=0
+            fi
+          fi
 
           MATRIX=$(jq -cn \
             --argjson usages "$USAGES" \
@@ -464,7 +491,7 @@ jobs:
 
       - name: Run patcher update
         env:
-          GITHUB_OAUTH_TOKEN: ${{ inputs.use_customer_token_for_modules == false && steps.gruntwork-read-token.outputs.PIPELINES_TOKEN || steps.org-read-token.outputs.PIPELINES_TOKEN }}
+          GITHUB_OAUTH_TOKEN: ${{ (inputs.use_customer_token_for_modules == true || inputs.use_customer_token_for_modules == 'true') && steps.org-read-token.outputs.PIPELINES_TOKEN || steps.gruntwork-read-token.outputs.PIPELINES_TOKEN }}
           GITHUB_PUBLISH_TOKEN: ${{ steps.pr-create-token.outputs.PIPELINES_TOKEN }}
           GIT_AUTHOR_NAME: ${{ inputs.commit_author_name }}
           GIT_AUTHOR_EMAIL: ${{ inputs.commit_author_email }}
